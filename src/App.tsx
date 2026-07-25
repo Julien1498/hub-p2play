@@ -22,10 +22,10 @@ export default function App() {
   const showLobby = !hub.roomId;
 
   const AVAILABLE_GAMES = [
-    { key: "skull", name: "💀 Skull & Roses", desc: "Mises, Bluff & Roses." },
-    { key: "royal", name: "👑 Royal Bluff (Coup)", desc: "Influence & Rôles cachés." },
-    { key: "sheriff", name: "🤠 Sheriff & Smugglers", desc: "Négociation & Pots-de-vin." },
-    { key: "pool", name: "🎱 8 Ball Pool", desc: "Billard par équipes + spectateurs." }
+    { key: "skull", name: "💀 Skull & Roses", desc: "Mises, Bluff & Roses.", hasPreConfig: false },
+    { key: "royal", name: "👑 Royal Bluff (Coup)", desc: "Influence & Rôles cachés.", hasPreConfig: true },
+    { key: "sheriff", name: "🤠 Sheriff & Smugglers", desc: "Négociation & Pots-de-vin.", hasPreConfig: true },
+    { key: "pool", name: "🎱 P2Play Billards", desc: "Billard par équipes + spectateurs.", hasPreConfig: false }
   ];
 
   return (
@@ -89,7 +89,12 @@ export default function App() {
             playerName={hub.players.find(p => p.peerId === hub.myPeerId)?.username || "Joueur"}
             playerAvatar={hub.players.find(p => p.peerId === hub.myPeerId)?.avatar || "👑"}
             externalPeerManager={hub.externalPeerManager}
+            isHost={hub.isHost}
+            lateJoin={!hub.isHost}
+            gameConfig={hub.gameConfig}
+            hubPhase={hub.hubPhase}
             onExit={hub.returnToHub}
+            onLeave={hub.disconnect}
           />
         ) : (
           <div className="max-w-2xl mx-auto space-y-8">
@@ -132,7 +137,10 @@ export default function App() {
                 </div>
                 {hub.isHost && hub.selectedGame && (
                   <button
-                    onClick={hub.launchGame}
+                    onClick={() => {
+                      const game = AVAILABLE_GAMES.find((g) => g.key === hub.selectedGame);
+                      hub.launchGame(game?.hasPreConfig ? 'GAME_CONFIG' : 'GAME_RUNNING');
+                    }}
                     className="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 font-bold rounded-xl text-white transition-all shadow-lg shadow-violet-900/30"
                   >
                     Lancer la partie

@@ -1,15 +1,21 @@
 import { useState, useEffect, useRef } from "react";
+import type { PeerManagerLike } from "p2play-core";
 
 interface GameMountPanelProps {
   gameName: string;
   peerId: string;
   playerName?: string;
   playerAvatar?: string;
-  externalPeerManager?: any;
+  externalPeerManager?: PeerManagerLike;
+  isHost?: boolean;
+  lateJoin?: boolean;
+  gameConfig?: any;
+  hubPhase?: string;
   onExit: () => void;
+  onLeave?: () => void;
 }
 
-export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, externalPeerManager, onExit }: GameMountPanelProps) {
+export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, externalPeerManager, isHost, lateJoin, gameConfig, hubPhase, onExit, onLeave }: GameMountPanelProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,6 +74,10 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
             playerAvatar,
             externalPeerManager,
             isEmbedded: true,
+            isHost,
+            lateJoin,
+            gameConfig,
+            hubPhase,
             onExit
           });
         }
@@ -92,13 +102,24 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
 
   return (
     <div className="fixed inset-0 z-50 w-screen h-screen bg-zinc-950 flex flex-col overflow-hidden">
-      {/* Top-left Return Button */}
-      <button
-        onClick={onExit}
-        className="fixed top-4 left-4 z-[100] flex items-center gap-2 bg-zinc-900/90 hover:bg-zinc-800 text-amber-400 font-bold px-4 py-2 rounded-xl backdrop-blur-md border border-amber-500/30 shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
-      >
-        ← Lobby P2Play
-      </button>
+      {/* Top-left Return / Leave Button (host-only returns to the Hub lobby;
+          non-hosts can only leave, to prevent ending the game for everyone) */}
+      {isHost ? (
+        <button
+          onClick={onExit}
+          className="fixed top-4 left-4 z-[100] flex items-center gap-2 bg-zinc-900/90 hover:bg-zinc-800 text-amber-400 font-bold px-4 py-2 rounded-xl backdrop-blur-md border border-amber-500/30 shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
+        >
+          ← Lobby P2Play
+        </button>
+      ) : (
+        <button
+          onClick={() => (onLeave ? onLeave() : onExit())}
+          className="fixed top-4 left-4 z-[100] flex items-center gap-2 bg-zinc-900/90 hover:bg-zinc-800 text-rose-400 font-bold px-4 py-2 rounded-xl backdrop-blur-md border border-rose-500/30 shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
+          title="Quitter le Hub (la partie continue pour les autres)"
+        >
+          Quitter le Hub
+        </button>
+      )}
 
       {loading && (
         <div className="flex flex-col items-center justify-center h-full gap-3 py-12">

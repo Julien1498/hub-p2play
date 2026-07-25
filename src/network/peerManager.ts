@@ -1,7 +1,9 @@
 import Peer from "peerjs";
 import type { DataConnection } from "peerjs";
+import type { ChatMessage, NetworkMessage, PeerManagerLike } from "p2play-core";
+import type { HubPhase, HubState } from "./protocol";
 
-export class HubPeerManager {
+export class HubPeerManager implements PeerManagerLike {
   private peer: Peer | null = null;
   public myPeerId: string | null = null;
   public hostPeerId: string | null = null;
@@ -11,12 +13,21 @@ export class HubPeerManager {
   public onStatusChange: ((status: 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED') => void) | null = null;
   public onMessage: ((sender: string, data: any) => void) | null = null;
   public onPlayersUpdate: (() => void) | null = null;
+  public onHubStateUpdate: ((state: HubState) => void) | null = null;
+
+  // Canonical Hub state (owned by the host, mirrored by clients)
+  public selectedGame: string | null = null;
+  public activeGame: string | null = null;
+  public gameConfig: any = null;
+  public phase: HubPhase = 'HUB_LOBBY';
 
   // Game-level callbacks (used by embedded games via externalPeerManager)
   public onStateReceived: ((state: any) => void) | null = null;
   public onChatReceived: ((msg: any) => void) | null = null;
-  public onAudioReceived: ((sfx: string) => void) | null = null;
+  public onAudioReceived: ((sfx: string, intensity?: number) => void) | null = null;
+  public onPeerStatusChange: ((peerId: string, status: 'CONNECTED' | 'DISCONNECTED') => void) | null = null;
   public hostActionHandler: ((sender: string, msg: any) => void) | null = null;
+  public onCustomMessage: ((msg: any) => void) | null = null;
 
   public username: string = "";
   public avatar: string = "👑";
@@ -70,6 +81,7 @@ export class HubPeerManager {
   private setupConnection(conn: DataConnection) {
     conn.on("open", () => {
       this.connections.set(conn.peer, conn);
+      this.onPeerStatusChange?.(conn.peer, 'CONNECTED');
       
       // If we are a client, let the host know our username & avatar
       if (!this.isHost) {
@@ -88,6 +100,8 @@ export class HubPeerManager {
         }
         // Broadcast the updated list to all players
         this.broadcast({ type: 'SYNC_LOBBY', payload: this.lobbyPlayers });
+        // Sync the current Hub state (selected game / active game / config) to the late joiner
+        this.send(data.sender, { type: 'SYNC_HUB_STATE', payload: this.getHubState(), sender: this.myPeerId || "" });
         if (this.onPlayersUpdate) this.onPlayersUpdate();
       } else if (data.type === 'UPDATE_AVATAR' && this.isHost) {
         const player = this.lobbyPlayers.find(p => p.peerId === data.sender);
@@ -99,6 +113,8 @@ export class HubPeerManager {
       } else if (data.type === 'SYNC_LOBBY') {
         this.lobbyPlayers = data.payload;
         if (this.onPlayersUpdate) this.onPlayersUpdate();
+      } else if (data.type === 'SYNC_HUB_STATE') {
+        this.applyHubState(data.payload);
       }
 
       if (this.onMessage) {
@@ -123,14 +139,17 @@ export class HubPeerManager {
           return; // host engine processes; do not relay raw actions
       }
 
-      // If we are host, broadcast non-join hub messages to other clients
-      if (this.isHost && data.type !== 'PLAYER_JOINED' && data.type !== 'UPDATE_AVATAR') {
+      // If we are host, broadcast non-join hub messages to other clients.
+      // SYNC_LOBBY / SYNC_HUB_STATE are host-owned and must never be relayed from a client.
+      if (this.isHost && data.type !== 'PLAYER_JOINED' && data.type !== 'UPDATE_AVATAR'
+          && data.type !== 'SYNC_LOBBY' && data.type !== 'SYNC_HUB_STATE') {
         this.broadcast(data, conn.peer);
       }
     });
 
     conn.on("close", () => {
       this.connections.delete(conn.peer);
+      this.onPeerStatusChange?.(conn.peer, 'DISCONNECTED');
       if (this.isHost) {
         this.lobbyPlayers = this.lobbyPlayers.filter(p => p.peerId !== conn.peer);
         this.broadcast({ type: 'SYNC_LOBBY', payload: this.lobbyPlayers });
@@ -152,9 +171,59 @@ export class HubPeerManager {
     if (conn) conn.send(data);
   }
 
+  // ---- Hub shared state (host-owned) ----
+
+  public getHubState(): HubState {
+    return {
+      selectedGame: this.selectedGame,
+      activeGame: this.activeGame,
+      gameConfig: this.gameConfig,
+      phase: this.phase,
+    };
+  }
+
+  public applyHubState(state: HubState) {
+    if (!state) return;
+    this.selectedGame = state.selectedGame ?? null;
+    this.activeGame = state.activeGame ?? null;
+    this.gameConfig = state.gameConfig ?? null;
+    this.phase = state.phase ?? 'HUB_LOBBY';
+    if (this.onHubStateUpdate) this.onHubStateUpdate(this.getHubState());
+  }
+
+  public broadcastHubState(excludePeerId?: string) {
+    if (!this.isHost) return;
+    this.broadcast({ type: 'SYNC_HUB_STATE', payload: this.getHubState(), sender: this.myPeerId || "" }, excludePeerId);
+  }
+
+  public setHubSelection(gameKey: string | null) {
+    this.selectedGame = gameKey;
+    this.phase = gameKey ? 'HUB_LOBBY' : 'HUB_LOBBY';
+    this.broadcastHubState();
+  }
+
+  public setHubActiveGame(gameKey: string | null, phase: HubPhase = 'GAME_RUNNING') {
+    this.activeGame = gameKey;
+    this.phase = gameKey ? phase : 'HUB_LOBBY';
+    this.broadcastHubState();
+  }
+
+  public setHubGameConfig(config: any) {
+    this.gameConfig = config;
+    this.broadcastHubState();
+  }
+
+  public resetHubState() {
+    this.selectedGame = null;
+    this.activeGame = null;
+    this.gameConfig = null;
+    this.phase = 'HUB_LOBBY';
+    if (this.isHost) this.broadcastHubState();
+  }
+
   // ---- Game PeerManager API (used by embedded games via externalPeerManager) ----
 
-  public sendToHost(type: string, payload: any): void {
+  public sendToHost(type: string, payload: Record<string, unknown>): void {
     if (this.isHost) {
       if (this.hostActionHandler && this.myPeerId) {
         this.hostActionHandler(this.myPeerId, { type, ...payload });
@@ -170,7 +239,7 @@ export class HubPeerManager {
   }
 
   public sendChat(senderName: string, text: string): void {
-    const chatMsg = {
+    const chatMsg: ChatMessage = {
       type: 'CHAT',
       sender: senderName,
       text,
@@ -185,11 +254,15 @@ export class HubPeerManager {
     }
   }
 
-  public sendAudio(sfx: string): void {
-    const audioMsg = { type: 'AUDIO_EVENT', sfx };
+  public sendAudio(sfx: string, intensity?: number): void {
+    const audioMsg: NetworkMessage = {
+      type: 'AUDIO_EVENT',
+      sfx,
+      ...(intensity !== undefined ? { intensity } : {}),
+    };
     if (this.isHost) {
       this.broadcast(audioMsg);
-      if (this.onAudioReceived) this.onAudioReceived(sfx);
+      if (this.onAudioReceived) this.onAudioReceived(sfx, intensity);
     } else if (this.hostPeerId) {
       const conn = this.connections.get(this.hostPeerId);
       if (conn && conn.open) conn.send(audioMsg);
@@ -223,6 +296,10 @@ export class HubPeerManager {
     this.myPeerId = null;
     this.hostPeerId = null;
     this.isHost = false;
+    this.selectedGame = null;
+    this.activeGame = null;
+    this.gameConfig = null;
+    this.phase = 'HUB_LOBBY';
     if (this.onStatusChange) this.onStatusChange('DISCONNECTED');
   }
 }

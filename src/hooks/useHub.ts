@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { globalHubPeer } from "../network/peerManager";
-import type { GameActionMessage } from "../network/protocol";
+import type { GameActionMessage, HubState } from "../network/protocol";
 
 export function useHub() {
   const [status, setStatus] = useState<'CONNECTING' | 'CONNECTED' | 'DISCONNECTED'>('DISCONNECTED');
@@ -8,6 +8,7 @@ export function useHub() {
   const [players, setPlayers] = useState<{ peerId: string; username: string; avatar: string }[]>([]);
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [activeGame, setActiveGame] = useState<string | null>(null);
+  const [gameConfig, setGameConfig] = useState<any>(null);
   const [isHost, setIsHost] = useState(false);
 
   const updateAvatar = useCallback((avatar: string) => {
@@ -16,19 +17,40 @@ export function useHub() {
 
   const broadcastGameSelection = useCallback((gameKey: string) => {
     setSelectedGame(gameKey);
-    globalHubPeer.broadcast({ type: 'SELECT_GAME', payload: gameKey, sender: globalHubPeer.myPeerId || "" });
+    if (globalHubPeer.isHost) {
+      globalHubPeer.setHubSelection(gameKey);
+    } else {
+      globalHubPeer.broadcast({ type: 'SELECT_GAME', payload: gameKey, sender: globalHubPeer.myPeerId || "" });
+    }
   }, []);
 
-  const launchGame = useCallback(() => {
-    if (!selectedGame) return;
-    setActiveGame(selectedGame);
-    globalHubPeer.broadcast({ type: 'START_GAME', payload: selectedGame, sender: globalHubPeer.myPeerId || "" });
+  const launchGame = useCallback((phase: 'GAME_CONFIG' | 'GAME_RUNNING' = 'GAME_RUNNING') => {
+    const game = globalHubPeer.selectedGame || selectedGame;
+    if (!game) return;
+    setActiveGame(game);
+    if (globalHubPeer.isHost) {
+      globalHubPeer.setHubActiveGame(game, phase);
+    } else {
+      globalHubPeer.broadcast({ type: 'START_GAME', payload: game, sender: globalHubPeer.myPeerId || "" });
+    }
   }, [selectedGame]);
 
   const returnToHub = useCallback(() => {
     setActiveGame(null);
     setSelectedGame(null);
-    globalHubPeer.broadcast({ type: 'RETURN_TO_HUB', sender: globalHubPeer.myPeerId || "" });
+    setGameConfig(null);
+    if (globalHubPeer.isHost) {
+      globalHubPeer.resetHubState();
+    } else {
+      globalHubPeer.broadcast({ type: 'RETURN_TO_HUB', sender: globalHubPeer.myPeerId || "" });
+    }
+  }, []);
+
+  const updateGameConfig = useCallback((config: any) => {
+    setGameConfig(config);
+    if (globalHubPeer.isHost) {
+      globalHubPeer.setHubGameConfig(config);
+    }
   }, []);
 
   useEffect(() => {
@@ -39,11 +61,20 @@ export function useHub() {
       } else {
         setRoomId(null);
         setPlayers([]);
+        setSelectedGame(null);
+        setActiveGame(null);
+        setGameConfig(null);
       }
     };
 
     globalHubPeer.onPlayersUpdate = () => {
       setPlayers([...globalHubPeer.lobbyPlayers]);
+    };
+
+    globalHubPeer.onHubStateUpdate = (state: HubState) => {
+      setSelectedGame(state.selectedGame);
+      setActiveGame(state.activeGame);
+      setGameConfig(state.gameConfig);
     };
 
     globalHubPeer.onMessage = (sender, data: GameActionMessage) => {
@@ -57,6 +88,7 @@ export function useHub() {
         case 'RETURN_TO_HUB':
           setActiveGame(null);
           setSelectedGame(null);
+          setGameConfig(null);
           break;
       }
     };
@@ -64,6 +96,7 @@ export function useHub() {
     return () => {
       globalHubPeer.onStatusChange = null;
       globalHubPeer.onPlayersUpdate = null;
+      globalHubPeer.onHubStateUpdate = null;
       globalHubPeer.onMessage = null;
     };
   }, []);
@@ -83,6 +116,7 @@ export function useHub() {
     setIsHost(false);
     setActiveGame(null);
     setSelectedGame(null);
+    setGameConfig(null);
   }, []);
 
   return {
@@ -92,10 +126,13 @@ export function useHub() {
     players,
     selectedGame,
     activeGame,
+    gameConfig,
+    hubPhase: globalHubPeer.phase,
     isHost,
     createRoom,
     joinRoom,
     updateAvatar,
+    updateGameConfig,
     disconnect,
     broadcastGameSelection,
     launchGame,
