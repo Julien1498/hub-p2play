@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type { PeerManagerLike } from "p2play-core";
+import { activateGameStyle, unloadAllGameStyles } from "../../utils/gameStyles";
 
 interface GameMountPanelProps {
   gameName: string;
@@ -22,7 +23,8 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
 
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
-    let styleLink: HTMLLinkElement | null = null;
+    let unmountGame: (() => void) | null = null;
+    let cancelled = false;
 
     const loadGame = async () => {
       try {
@@ -30,45 +32,40 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
         setError(null);
 
         // Compute base-relative path for deployment on subpaths (e.g. GitHub Pages)
-        const rawBase = import.meta.env.BASE_URL || './';
-        const gameBasePath = rawBase.endsWith('/') ? `${rawBase}games/${gameName}/` : `${rawBase}/games/${gameName}/`;
+        const rawBase = import.meta.env.BASE_URL || "./";
+        const gameBasePath = rawBase.endsWith("/")
+          ? `${rawBase}games/${gameName}/`
+          : `${rawBase}/games/${gameName}/`;
 
-        // Inject game CSS
-        const styleId = `game-style-${gameName}`;
-        if (!document.getElementById(styleId)) {
-          styleLink = document.createElement('link');
-          styleLink.id = styleId;
-          styleLink.rel = 'stylesheet';
-          styleLink.href = `${gameBasePath}style.css`;
-          document.head.appendChild(styleLink);
-        }
+        // Only this game's CSS may be active; unload any leftover styles from
+        // a previous session so they cannot bleed into the hub or another game.
+        activateGameStyle(gameName, `${gameBasePath}style.css`);
 
-        // Inject the game as a <script type="module"> to bypass Vite public import restriction
         await new Promise<void>((resolve, reject) => {
-          // Remove previous script if any
           const existingScript = document.getElementById(`game-script-${gameName}`);
           if (existingScript) existingScript.remove();
 
-          script = document.createElement('script');
+          script = document.createElement("script");
           script.id = `game-script-${gameName}`;
-          script.type = 'module';
+          script.type = "module";
           script.src = `${gameBasePath}index.js`;
           script.onload = () => resolve();
           script.onerror = () => reject(new Error(`Échec du chargement du script du jeu "${gameName}"`));
           document.head.appendChild(script);
         });
 
-        // Each game's main.tsx exposes window.mountXxx after script loads
+        if (cancelled) return;
+
         const mountFnName = `mount${gameName.charAt(0).toUpperCase() + gameName.slice(1)}`;
         const mountFn = (window as any)[mountFnName];
 
-        if (typeof mountFn !== 'function') {
+        if (typeof mountFn !== "function") {
           throw new Error(`Fonction de montage "${mountFnName}" introuvable sur window.`);
         }
 
         if (mountRef.current) {
-          mountRef.current.innerHTML = '';
-          mountFn(mountRef.current, {
+          mountRef.current.innerHTML = "";
+          const cleanup = mountFn(mountRef.current, {
             peerId,
             playerName,
             playerAvatar,
@@ -78,13 +75,17 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
             lateJoin,
             gameConfig,
             hubPhase,
-            onExit
+            onExit,
           });
+          if (typeof cleanup === "function") {
+            unmountGame = cleanup;
+          }
         }
 
         setLoading(false);
       } catch (err: any) {
-        console.error('Failed to load game module:', err);
+        if (cancelled) return;
+        console.error("Failed to load game module:", err);
         setError(`Impossible de charger le jeu "${gameName}" : ${err.message}`);
         setLoading(false);
       }
@@ -93,9 +94,24 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
     loadGame();
 
     return () => {
-      // Cleanup script on unmount (keep style for now)
+      cancelled = true;
+      // Tear down the embedded React root before clearing the mount node.
+      try {
+        unmountGame?.();
+      } catch (e) {
+        console.warn("Game unmount failed:", e);
+      }
+      unmountGame = null;
+
       if (script && document.head.contains(script)) {
         document.head.removeChild(script);
+      }
+
+      // Restore hub-only CSS: no game stylesheet may remain active.
+      unloadAllGameStyles();
+
+      if (mountRef.current) {
+        mountRef.current.innerHTML = "";
       }
     };
   }, [gameName, peerId]);
