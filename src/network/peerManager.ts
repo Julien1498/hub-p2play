@@ -28,6 +28,11 @@ export class HubPeerManager implements PeerManagerLike {
   public onPeerStatusChange: ((peerId: string, status: 'CONNECTED' | 'DISCONNECTED') => void) | null = null;
   public hostActionHandler: ((sender: string, msg: any) => void) | null = null;
   public onCustomMessage: ((msg: any) => void) | null = null;
+  public onVoiceMessage: ((msg: any) => void) | null = null;
+
+  public getPeer(): Peer | null {
+    return this.peer;
+  }
 
   public username: string = "";
   public avatar: string = "👑";
@@ -43,7 +48,17 @@ export class HubPeerManager implements PeerManagerLike {
       ? roomId 
       : `${username.replace(/[^a-zA-Z0-9]/g, '')}_${roomId}_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     
-    this.peer = new Peer(peerId);
+    this.peer = new Peer(peerId, {
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" },
+          { urls: "stun:stun3.l.google.com:19302" },
+          { urls: "stun:stun4.l.google.com:19302" },
+        ],
+      },
+    });
     
     if (this.onStatusChange) this.onStatusChange('CONNECTING');
 
@@ -72,9 +87,13 @@ export class HubPeerManager implements PeerManagerLike {
       if (this.onStatusChange) this.onStatusChange('DISCONNECTED');
     });
 
-    this.peer.on("error", (err) => {
-      console.error("PeerJS Error:", err);
-      if (this.onStatusChange) this.onStatusChange('DISCONNECTED');
+    this.peer.on("error", (err: any) => {
+      console.warn("PeerJS Warning/Error:", err?.type || err);
+      // Only disconnect on fatal connection/ID failure types
+      const fatalTypes = ["invalid-id", "unavailable-id", "browser-incompatible"];
+      if (err?.type && fatalTypes.includes(err.type)) {
+        if (this.onStatusChange) this.onStatusChange('DISCONNECTED');
+      }
     });
   }
 
@@ -133,6 +152,11 @@ export class HubPeerManager implements PeerManagerLike {
         case 'AUDIO_EVENT':
           if (this.onAudioReceived && data.sfx) this.onAudioReceived(data.sfx);
           if (this.isHost) this.broadcast(data, conn.peer); // relay to other merchants
+          return;
+        case 'VOICE_STATE_UPDATE':
+        case 'VOICE_MODERATION_ACTION':
+          if (this.onVoiceMessage) this.onVoiceMessage(data);
+          if (this.isHost) this.broadcast(data, conn.peer);
           return;
         case 'ACTION':
           if (this.isHost && this.hostActionHandler) this.hostActionHandler(conn.peer, data);
