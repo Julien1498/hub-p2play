@@ -137,6 +137,9 @@ export class HubPeerManager implements PeerManagerLike {
         case 'ACTION':
           if (this.isHost && this.hostActionHandler) this.hostActionHandler(conn.peer, data);
           return; // host engine processes; do not relay raw actions
+        default:
+          if (this.onCustomMessage) this.onCustomMessage(data);
+          break;
       }
 
       // If we are host, broadcast non-join hub messages to other clients.
