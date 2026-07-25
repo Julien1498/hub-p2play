@@ -12,7 +12,8 @@ import { defineConfig, devices } from "@playwright/test";
  * `node download-games.js` first; locally Playwright reuses an already-running
  * dev server (or starts one on port 3004).
  */
-const BASE_URL = "http://localhost:3004";
+const PORT = process.env.HUB_PORT || "3004";
+const BASE_URL = `http://localhost:${PORT}`;
 const isCI = !!process.env.CI;
 
 export default defineConfig({
@@ -44,13 +45,13 @@ export default defineConfig({
 
   webServer: isCI
     ? {
-        command: "npx vite --port 3004 --strictPort",
+        command: `npx vite --port ${PORT} --strictPort`,
         url: BASE_URL,
         reuseExistingServer: false,
         timeout: 120_000,
       }
     : {
-        command: "npx vite --port 3004 --strictPort",
+        command: `npx vite --port ${PORT} --strictPort`,
         url: BASE_URL,
         reuseExistingServer: true,
         timeout: 120_000,

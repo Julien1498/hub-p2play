@@ -22,7 +22,7 @@ export default function App() {
   const showLobby = !hub.roomId;
 
   const AVAILABLE_GAMES = [
-    { key: "skull", name: "💀 Skull & Roses", desc: "Mises, Bluff & Roses.", hasPreConfig: false },
+    { key: "skull", name: "💀 Skull & Roses", desc: "Mises, Bluff & Roses.", hasPreConfig: true },
     { key: "royal", name: "👑 Royal Bluff (Coup)", desc: "Influence & Rôles cachés.", hasPreConfig: true },
     { key: "sheriff", name: "🤠 Sheriff & Smugglers", desc: "Négociation & Pots-de-vin.", hasPreConfig: true },
     { key: "pool", name: "🎱 P2Play Billards", desc: "Billard par équipes + spectateurs.", hasPreConfig: false }

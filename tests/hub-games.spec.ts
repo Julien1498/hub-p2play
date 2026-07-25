@@ -8,14 +8,13 @@ import { test, expect, type Browser, type Page } from "@playwright/test";
  *   2. At least one round/turn action is performed and the game state advances.
  *   3. The host can return to the hub lobby.
  *
- * The embedded auto-start only fires for the host once the hub lobby has 2
- * players, so each test brings up a second browser context (guest) that joins
- * the host's room via PeerJS. The guest is only needed to populate the lobby
- * for Skull; for Royal and Sheriff the guest is also asserted on (deck-theme
- * propagation, and "Je suis Prêt !" for Royal's ready-gated start).
+ * Embedded games no longer auto-start: each shows a pre-game lobby (roles /
+ * deck / theme) that the host must configure before starting. Tests bring up a
+ * second browser context (guest) so the hub lobby has 2 players, then exercise
+ * guest ready (when gated) + host in-game "Lancer la partie".
  */
 
-const HUB = "http://localhost:3004";
+const HUB = `http://localhost:${process.env.HUB_PORT || "3004"}`;
 
 async function countOccurrences(page: Page, needle: string): Promise<number> {
   const text = (await page.locator("body").innerText()) ?? "";
@@ -95,59 +94,55 @@ async function returnToHub(host: Page) {
   await expect(host.getByText(/Sélectionner un jeu/i)).toBeVisible({ timeout: 15000 });
 }
 
-// --- Auto-start games (board appears right after the hub launch) ----------------
+// --- Skull: host configures roles, guest must ready, then host starts ----------------
 //
-// Only Skull still auto-starts in embedded mode. Royal and Sheriff now show a
-// pre-game lobby (deck selection) that the host must configure before starting
-// — see the dedicated parameterized sections below.
+// Skull no longer auto-starts in embedded mode: it shows the "Salon de Jeu"
+// lobby so players can pick Joueur / Spectateur before starting. The host's
+// "Lancer la partie" is gated on all players being ready.
 
-type AutoStartGame = {
-  key: "skull";
-  cardText: string;
-  lobbyMarker: RegExp;
-  boardMarker: RegExp;
-  playRound: (host: Page) => Promise<void>;
-};
+test("launch skull and play one round", async ({ browser }) => {
+  const errors: string[] = [];
+  const { host, guest, hostCtx, guestCtx } = await createTwoPlayerRoom(browser, errors);
+  try {
+    await launchFromHub(host, "Skull");
 
-const AUTO_START_GAMES: AutoStartGame[] = [
-  {
-    key: "skull",
-    cardText: "Skull",
-    lobbyMarker: /Salon de Jeu/,
-    boardMarker: /PHASE :/,
-    playRound: async (host) => {
-      // Place the first ROSE card (label is uppercased via CSS; DOM text is "Rose" / 🌹).
-      const rose = host.locator("button", { hasText: /🌹/ }).first();
-      await expect(rose).toBeEnabled();
-      const before = await countOccurrences(host, "Tapis vide");
-      await rose.click();
-      await expect.poll(async () => countOccurrences(host, "Tapis vide"), { timeout: 15000 })
-        .toBeLessThan(before);
-    },
-  },
-];
+    // Role-selection lobby must appear (not the in-game board).
+    await expect(host.getByText(/Salon de Jeu/)).toBeVisible({ timeout: 40000 });
+    await expect(host.getByText(/R.LE.*JOUEUR.*SPECTATEUR/i)).toBeVisible({ timeout: 15000 });
 
-for (const g of AUTO_START_GAMES) {
-  test(`launch ${g.key} and play one round`, async ({ browser }) => {
-    const errors: string[] = [];
-    const { host, hostCtx, guestCtx } = await createTwoPlayerRoom(browser, errors);
-    try {
-      await launchFromHub(host, g.cardText);
-      await waitForBoard(host, g.boardMarker, g.key);
-      expect(g.lobbyMarker.test((await host.locator("body").innerText()) ?? ""),
-        `${g.key}: in-game lobby should be gone`).toBe(false);
-      await g.playRound(host);
-      await returnToHub(host);
-    } finally {
-      await test.info().attach(
-        `${g.key}-console-errors.txt`,
-        { body: errors.join("\n") || "(no console/page errors)" },
-      );
-      await hostCtx.close();
-      await guestCtx.close();
-    }
-  });
-}
+    // Guest must ready up before the host can start.
+    const readyBtn = guest.getByRole("button", { name: /Je suis Prêt/i }).first();
+    await expect(readyBtn).toBeEnabled({ timeout: 15000 });
+    await readyBtn.click();
+
+    // Host starts from the skull lobby (enabled once guest is ready).
+    const inGameLaunch = host.getByRole("button", { name: /Lancer la partie/i }).first();
+    await expect(inGameLaunch).toBeEnabled({ timeout: 15000 });
+    await inGameLaunch.click();
+
+    // Board marker uses CSS uppercase ("Phase :" → "PHASE :").
+    await waitForBoard(host, /PHASE\s*:/i, "skull");
+    expect(/Salon de Jeu/.test((await host.locator("body").innerText()) ?? ""),
+      "skull: in-game lobby should be gone").toBe(false);
+
+    // Place the first ROSE card (label is uppercased via CSS; DOM text is "Rose" / 🌹).
+    const rose = host.locator("button", { hasText: /🌹/ }).first();
+    await expect(rose).toBeEnabled();
+    const before = await countOccurrences(host, "Tapis vide");
+    await rose.click();
+    await expect.poll(async () => countOccurrences(host, "Tapis vide"), { timeout: 15000 })
+      .toBeLessThan(before);
+
+    await returnToHub(host);
+  } finally {
+    await test.info().attach(
+      "skull-console-errors.txt",
+      { body: errors.join("\n") || "(no console/page errors)" },
+    );
+    await hostCtx.close();
+    await guestCtx.close();
+  }
+});
 
 // --- Royal: host must pick a deck, guest must ready, then host starts ----------------
 //
