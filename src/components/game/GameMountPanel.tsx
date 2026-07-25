@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import type { PeerManagerLike } from "p2play-core";
-import { activateGameStyle, unloadAllGameStyles } from "../../utils/gameStyles";
+import {
+  activateGameStyle,
+  unloadAllGameStyles,
+  GAME_SHELL_BACKGROUNDS,
+} from "../../utils/gameStyles";
 
 interface GameMountPanelProps {
   gameName: string;
@@ -21,6 +25,9 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const shellBackground =
+    GAME_SHELL_BACKGROUNDS[gameName] ?? "radial-gradient(circle at center, #09090b 0%, #09090b 100%)";
+
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
     let unmountGame: (() => void) | null = null;
@@ -31,15 +38,16 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
         setLoading(true);
         setError(null);
 
-        // Compute base-relative path for deployment on subpaths (e.g. GitHub Pages)
         const rawBase = import.meta.env.BASE_URL || "./";
         const gameBasePath = rawBase.endsWith("/")
           ? `${rawBase}games/${gameName}/`
           : `${rawBase}/games/${gameName}/`;
 
-        // Only this game's CSS may be active; unload any leftover styles from
-        // a previous session so they cannot bleed into the hub or another game.
-        activateGameStyle(gameName, `${gameBasePath}style.css`);
+        // Load only this game's CSS (fonts + utilities). Background is painted
+        // on the shell below — body{background} cannot fill the viewport when
+        // the only child is position:fixed (body height collapses → white flash).
+        await activateGameStyle(gameName, `${gameBasePath}style.css`);
+        if (cancelled) return;
 
         await new Promise<void>((resolve, reject) => {
           const existingScript = document.getElementById(`game-script-${gameName}`);
@@ -95,7 +103,6 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
 
     return () => {
       cancelled = true;
-      // Tear down the embedded React root before clearing the mount node.
       try {
         unmountGame?.();
       } catch (e) {
@@ -107,7 +114,6 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
         document.head.removeChild(script);
       }
 
-      // Restore hub-only CSS: no game stylesheet may remain active.
       unloadAllGameStyles();
 
       if (mountRef.current) {
@@ -117,9 +123,11 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
   }, [gameName, peerId]);
 
   return (
-    <div className="fixed inset-0 z-50 w-screen h-screen bg-zinc-950 flex flex-col overflow-hidden">
-      {/* Top-left Return / Leave Button (host-only returns to the Hub lobby;
-          non-hosts can only leave, to prevent ending the game for everyone) */}
+    <div
+      className="fixed inset-0 z-50 w-screen h-screen flex flex-col overflow-hidden"
+      style={{ background: shellBackground }}
+      data-p2play-game-shell={gameName}
+    >
       {isHost ? (
         <button
           onClick={onExit}

@@ -28,6 +28,26 @@ export default function App() {
     { key: "pool", name: "🎱 P2Play Billards", desc: "Billard par équipes + spectateurs.", hasPreConfig: false }
   ];
 
+  // While a game is mounted, render ONLY the game shell — no hub header/footer —
+  // so the game's body gradient/fonts are not mixed with hub chrome.
+  if (hub.activeGame) {
+    return (
+      <GameMountPanel
+        gameName={hub.activeGame}
+        peerId={hub.myPeerId || ""}
+        playerName={hub.players.find(p => p.peerId === hub.myPeerId)?.username || "Joueur"}
+        playerAvatar={hub.players.find(p => p.peerId === hub.myPeerId)?.avatar || "👑"}
+        externalPeerManager={hub.externalPeerManager}
+        isHost={hub.isHost}
+        lateJoin={!hub.isHost}
+        gameConfig={hub.gameConfig}
+        hubPhase={hub.hubPhase}
+        onExit={hub.returnToHub}
+        onLeave={hub.disconnect}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen text-zinc-50 font-sans flex flex-col justify-between relative">
       {/* Background radial decoration */}
@@ -81,20 +101,6 @@ export default function App() {
             status={hub.status}
             onCreate={hub.createRoom}
             onJoin={hub.joinRoom}
-          />
-        ) : hub.activeGame ? (
-          <GameMountPanel
-            gameName={hub.activeGame}
-            peerId={hub.myPeerId || ""}
-            playerName={hub.players.find(p => p.peerId === hub.myPeerId)?.username || "Joueur"}
-            playerAvatar={hub.players.find(p => p.peerId === hub.myPeerId)?.avatar || "👑"}
-            externalPeerManager={hub.externalPeerManager}
-            isHost={hub.isHost}
-            lateJoin={!hub.isHost}
-            gameConfig={hub.gameConfig}
-            hubPhase={hub.hubPhase}
-            onExit={hub.returnToHub}
-            onLeave={hub.disconnect}
           />
         ) : (
           <div className="max-w-2xl mx-auto space-y-8">
