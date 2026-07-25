@@ -16,12 +16,11 @@ interface GameMountPanelProps {
   lateJoin?: boolean;
   gameConfig?: any;
   hubPhase?: string;
-  hubHasVoiceChat?: boolean;
   onExit: () => void;
   onLeave?: () => void;
 }
 
-export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, externalPeerManager, isHost, lateJoin, gameConfig, hubPhase, hubHasVoiceChat = true, onExit, onLeave }: GameMountPanelProps) {
+export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, externalPeerManager, isHost, lateJoin, gameConfig, hubPhase, onExit, onLeave }: GameMountPanelProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +83,6 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
             lateJoin,
             gameConfig,
             hubPhase,
-            hubHasVoiceChat,
             onExit,
           });
           if (typeof cleanup === "function") {
