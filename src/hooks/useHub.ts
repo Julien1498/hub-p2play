@@ -10,6 +10,7 @@ export function useHub() {
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const [gameConfig, setGameConfig] = useState<any>(null);
   const [isHost, setIsHost] = useState(false);
+  const [enableVoice, setEnableVoice] = useState(true);
 
   const updateAvatar = useCallback((avatar: string) => {
     globalHubPeer.updateAvatar(avatar);
@@ -75,6 +76,7 @@ export function useHub() {
       setSelectedGame(state.selectedGame);
       setActiveGame(state.activeGame);
       setGameConfig(state.gameConfig);
+      if (state.enableVoice !== undefined) setEnableVoice(state.enableVoice);
     };
 
     globalHubPeer.onMessage = (sender, data: GameActionMessage) => {
@@ -101,9 +103,10 @@ export function useHub() {
     };
   }, []);
 
-  const createRoom = useCallback((roomName: string, username: string, avatar: string = "👑") => {
+  const createRoom = useCallback((roomName: string, username: string, avatar: string = "👑", voiceEnabled: boolean = true) => {
     setIsHost(true);
-    globalHubPeer.initialize(true, roomName, username, avatar);
+    setEnableVoice(voiceEnabled);
+    globalHubPeer.initialize(true, roomName, username, avatar, voiceEnabled);
   }, []);
 
   const joinRoom = useCallback((roomName: string, username: string, avatar: string = "👑") => {
@@ -129,6 +132,7 @@ export function useHub() {
     gameConfig,
     hubPhase: globalHubPeer.phase,
     isHost,
+    enableVoice,
     createRoom,
     joinRoom,
     updateAvatar,

@@ -5,6 +5,7 @@ export interface HubState {
   activeGame: string | null;
   gameConfig: any | null;
   phase: HubPhase;
+  enableVoice?: boolean;
 }
 
 export interface GameActionMessage {

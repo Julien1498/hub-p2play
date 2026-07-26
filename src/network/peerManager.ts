@@ -37,11 +37,13 @@ export class HubPeerManager implements PeerManagerLike {
   public username: string = "";
   public avatar: string = "👑";
   public lobbyPlayers: { peerId: string; username: string; avatar: string }[] = [];
+  public enableVoice: boolean = true;
 
-  public initialize(isHost: boolean, roomId: string, username: string, avatar: string = "👑") {
+  public initialize(isHost: boolean, roomId: string, username: string, avatar: string = "👑", enableVoice: boolean = true) {
     this.isHost = isHost;
     this.username = username;
     this.avatar = avatar;
+    this.enableVoice = enableVoice;
     this.lobbyPlayers = [{ peerId: isHost ? roomId : "", username, avatar }];
     
     const peerId = isHost 
@@ -216,6 +218,7 @@ export class HubPeerManager implements PeerManagerLike {
       activeGame: this.activeGame,
       gameConfig: this.gameConfig,
       phase: this.phase,
+      enableVoice: this.enableVoice,
     };
   }
 
@@ -225,6 +228,9 @@ export class HubPeerManager implements PeerManagerLike {
     this.activeGame = state.activeGame ?? null;
     this.gameConfig = state.gameConfig ?? null;
     this.phase = state.phase ?? 'HUB_LOBBY';
+    if (state.enableVoice !== undefined) {
+      this.enableVoice = state.enableVoice;
+    }
     if (this.onHubStateUpdate) this.onHubStateUpdate(this.getHubState());
   }
 
