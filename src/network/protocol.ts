@@ -1,3 +1,5 @@
+import type { CustomGameMeta } from '../utils/customGameLoader';
+
 export type HubPhase = 'HUB_LOBBY' | 'GAME_CONFIG' | 'GAME_RUNNING';
 
 export interface HubState {
@@ -6,6 +8,7 @@ export interface HubState {
   gameConfig: any | null;
   phase: HubPhase;
   enableVoice?: boolean;
+  customGames?: CustomGameMeta[];
 }
 
 export interface GameActionMessage {
@@ -16,3 +19,4 @@ export interface GameActionMessage {
   payload?: any;
   sender: string;
 }
+

@@ -5,6 +5,10 @@ import {
   unloadAllGameStyles,
   GAME_SHELL_BACKGROUNDS,
 } from "../../utils/gameStyles";
+import {
+  loadStoredCustomGames,
+  loadOrFetchCustomGame,
+} from "../../utils/customGameLoader";
 
 interface GameMountPanelProps {
   gameName: string;
@@ -20,13 +24,54 @@ interface GameMountPanelProps {
   onLeave?: () => void;
 }
 
+function findMountFunction(gameName: string, repo?: string): ((container: HTMLElement, props: any) => any) | null {
+  const win = window as any;
+
+  // 1. Direct match (e.g. mountSkull, mountRoyal, mountSheriff, mountPool)
+  const directKey = `mount${gameName.charAt(0).toUpperCase() + gameName.slice(1)}`;
+  if (typeof win[directKey] === "function") return win[directKey];
+
+  // 2. Repo-based match (e.g. gab371/skull-and-roses -> mountSkullAndRoses, mountSkull)
+  if (repo) {
+    const repoName = repo.split("/").pop() || "";
+    const camelRepo = repoName.replace(/[-_](.)/g, (_, c) => c.toUpperCase());
+    const repoKey = `mount${camelRepo.charAt(0).toUpperCase() + camelRepo.slice(1)}`;
+    if (typeof win[repoKey] === "function") return win[repoKey];
+
+    const firstWord = repoName.split(/[-_]/)[0];
+    const shortKey = `mount${firstWord.charAt(0).toUpperCase() + firstWord.slice(1)}`;
+    if (typeof win[shortKey] === "function") return win[shortKey];
+  }
+
+  // 3. Known generic mount entrypoints
+  if (typeof win.p2playMount === "function") return win.p2playMount;
+  if (typeof win.mountGame === "function") return win.mountGame;
+
+  // 4. Any mount* function attached to window
+  const allMountKeys = Object.keys(win).filter(
+    (k) => k.startsWith("mount") && typeof win[k] === "function"
+  );
+  if (allMountKeys.length > 0) {
+    return win[allMountKeys[allMountKeys.length - 1]];
+  }
+
+  return null;
+}
+
 export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, externalPeerManager, isHost, lateJoin, gameConfig, hubPhase, onExit, onLeave }: GameMountPanelProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const customGames = loadStoredCustomGames();
+  const customMeta = customGames.find((g) => g.key === gameName);
+  const isCustom = Boolean(customMeta || gameName.startsWith("custom-"));
+
   const shellBackground =
-    GAME_SHELL_BACKGROUNDS[gameName] ?? "radial-gradient(circle at center, #09090b 0%, #09090b 100%)";
+    GAME_SHELL_BACKGROUNDS[gameName] ??
+    (isCustom
+      ? "radial-gradient(circle at center, #180e29 0%, #09090b 100%)"
+      : "radial-gradient(circle at center, #09090b 0%, #09090b 100%)");
 
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
@@ -38,16 +83,46 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
         setLoading(true);
         setError(null);
 
-        const rawBase = import.meta.env.BASE_URL || "./";
-        const gameBasePath = rawBase.endsWith("/")
-          ? `${rawBase}games/${gameName}/`
-          : `${rawBase}/games/${gameName}/`;
+        let scriptSrc = "";
+        let repoSlug: string | undefined = undefined;
 
-        // Load only this game's CSS (fonts + utilities). Background is painted
-        // on the shell below — body{background} cannot fill the viewport when
-        // the only child is position:fixed (body height collapses → white flash).
-        await activateGameStyle(gameName, `${gameBasePath}style.css`);
+        let effectiveMeta = customMeta;
+        if (isCustom && !effectiveMeta) {
+          const rawKey = gameName.replace(/^custom-/, "");
+          const parts = rawKey.split("-");
+          const owner = parts[0] || "";
+          const repoName = parts.slice(1).join("-") || "";
+          const derivedRepo = `${owner}/${repoName}`;
+          effectiveMeta = {
+            key: gameName,
+            name: derivedRepo,
+            repo: derivedRepo,
+            version: "latest",
+            addedAt: Date.now(),
+            isCustom: true,
+          };
+        }
+
+        if (isCustom && effectiveMeta) {
+          repoSlug = effectiveMeta.repo;
+          const { jsBlobUrl, cssBlobUrl } = await loadOrFetchCustomGame(effectiveMeta);
+          scriptSrc = jsBlobUrl;
+
+          if (cssBlobUrl) {
+            await activateGameStyle(gameName, cssBlobUrl);
+          }
+        } else {
+          const rawBase = import.meta.env.BASE_URL || "./";
+          const gameBasePath = rawBase.endsWith("/")
+            ? `${rawBase}games/${gameName}/`
+            : `${rawBase}/games/${gameName}/`;
+
+          await activateGameStyle(gameName, `${gameBasePath}style.css`);
+          scriptSrc = `${gameBasePath}index.js`;
+        }
+
         if (cancelled) return;
+
 
         await new Promise<void>((resolve, reject) => {
           const existingScript = document.getElementById(`game-script-${gameName}`);
@@ -56,7 +131,7 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
           script = document.createElement("script");
           script.id = `game-script-${gameName}`;
           script.type = "module";
-          script.src = `${gameBasePath}index.js`;
+          script.src = scriptSrc;
           script.onload = () => resolve();
           script.onerror = () => reject(new Error(`Échec du chargement du script du jeu "${gameName}"`));
           document.head.appendChild(script);
@@ -64,11 +139,10 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
 
         if (cancelled) return;
 
-        const mountFnName = `mount${gameName.charAt(0).toUpperCase() + gameName.slice(1)}`;
-        const mountFn = (window as any)[mountFnName];
+        const mountFn = findMountFunction(gameName, repoSlug || customMeta?.repo);
 
         if (typeof mountFn !== "function") {
-          throw new Error(`Fonction de montage "${mountFnName}" introuvable sur window.`);
+          throw new Error(`Fonction de montage introuvable sur window pour "${gameName}".`);
         }
 
         if (mountRef.current) {
@@ -121,6 +195,7 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
       }
     };
   }, [gameName, peerId]);
+
 
   return (
     <div

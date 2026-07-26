@@ -75,9 +75,10 @@ async function createTwoPlayerRoom(browser: Browser, errors: string[]) {
 
 /** Hub-level launch: select a game card and click the hub "Lancer la partie". */
 async function launchFromHub(host: Page, cardText: string) {
-  await host.locator("button", { hasText: cardText }).first().click();
+  await host.locator('button, [role="button"]', { hasText: cardText }).first().click();
   await host.getByRole("button", { name: /Lancer la partie/i }).click();
 }
+
 
 /** Wait until a board marker regex matches the host body text. */
 async function waitForBoard(host: Page, marker: RegExp, label: string) {

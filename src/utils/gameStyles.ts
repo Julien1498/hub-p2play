@@ -68,14 +68,15 @@ export function activateGameStyle(gameName: string, href: string): Promise<HTMLL
 function waitForStylesheet(link: HTMLLinkElement): Promise<HTMLLinkElement> {
   if (link.sheet) return Promise.resolve(link);
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const onLoad = () => {
       cleanup();
       resolve(link);
     };
     const onError = () => {
       cleanup();
-      reject(new Error(`Failed to load stylesheet: ${link.href}`));
+      console.warn(`[gameStyles] Stylesheet failed to load or non-existent (${link.href}), proceeding without blocking script.`);
+      resolve(link);
     };
     const cleanup = () => {
       link.removeEventListener("load", onLoad);
@@ -85,3 +86,4 @@ function waitForStylesheet(link: HTMLLinkElement): Promise<HTMLLinkElement> {
     link.addEventListener("error", onError);
   });
 }
+

@@ -3,13 +3,15 @@ import { useHub } from "./hooks/useHub";
 import { Lobby } from "./components/game/Lobby";
 import { GameMountPanel } from "./components/game/GameMountPanel";
 import { AvatarSelector } from "./components/game/AvatarSelector";
-import { Gamepad2 } from "lucide-react";
+import { AddGameModal } from "./components/game/AddGameModal";
+import { Gamepad2, Plus, Trash2, Sparkles } from "lucide-react";
 import { SoundToggle } from "./components/ui/SoundToggle";
 import { VoiceChatPanel } from "p2play-core/voice";
 
 export default function App() {
   const hub = useHub();
   const [copied, setCopied] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const enableHubVoice = import.meta.env.VITE_ENABLE_VOICE_CHAT !== "false";
 
   const handleCopy = () => {
@@ -23,12 +25,27 @@ export default function App() {
 
   const showLobby = !hub.roomId;
 
-  const AVAILABLE_GAMES = [
-    { key: "skull", name: "💀 Skull & Roses", desc: "Mises, Bluff & Roses.", hasPreConfig: true },
-    { key: "royal", name: "👑 Royal Bluff (Coup)", desc: "Influence & Rôles cachés.", hasPreConfig: true },
-    { key: "sheriff", name: "🤠 Sheriff & Smugglers", desc: "Négociation & Pots-de-vin.", hasPreConfig: true },
-    { key: "pool", name: "🎱 P2Play Billards", desc: "Billard par équipes + spectateurs.", hasPreConfig: false }
+  const BUILTIN_GAMES = [
+    { key: "skull", name: "💀 Skull & Roses", desc: "Mises, Bluff & Roses.", hasPreConfig: true, isCustom: false },
+    { key: "royal", name: "👑 Royal Bluff (Coup)", desc: "Influence & Rôles cachés.", hasPreConfig: true, isCustom: false },
+    { key: "sheriff", name: "🤠 Sheriff & Smugglers", desc: "Négociation & Pots-de-vin.", hasPreConfig: true, isCustom: false },
+    { key: "pool", name: "🎱 P2Play Billards", desc: "Billard par équipes + spectateurs.", hasPreConfig: false, isCustom: false }
   ];
+
+  const allGames = [
+    ...BUILTIN_GAMES,
+    ...(hub.customGames || []).map((cg) => ({
+      key: cg.key,
+      name: cg.name,
+      desc: cg.desc || `Partie GitHub (${cg.repo})`,
+      hasPreConfig: cg.hasPreConfig ?? true,
+      isCustom: true,
+      repo: cg.repo,
+      version: cg.version,
+    })),
+  ];
+
+  const selectedGameObj = allGames.find((g) => g.key === hub.selectedGame);
 
   return (
     <>
@@ -135,44 +152,91 @@ export default function App() {
                 </div>
 
                 <div className="p-6 bg-zinc-900/40 border border-zinc-850 rounded-3xl shadow-xl space-y-6">
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center flex-wrap gap-3">
                     <div>
-                      <h2 className="text-xl font-bold text-zinc-200">🎮 Sélectionner un jeu</h2>
+                      <h2 className="text-xl font-bold text-zinc-200 flex items-center gap-2">
+                        <span>🎮 Sélectionner un jeu</span>
+                      </h2>
                       <p className="text-xs text-zinc-400">
-                        {hub.isHost ? "Choisissez le jeu de votre partie" : "En attente du choix de l'hôte..."}
+                        {hub.isHost ? "Choisissez le jeu de votre partie ou ajoutez un jeu GitHub Live" : "En attente du choix de l'hôte..."}
                       </p>
                     </div>
-                    {hub.isHost && hub.selectedGame && (
+
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={() => {
-                          const game = AVAILABLE_GAMES.find((g) => g.key === hub.selectedGame);
-                          hub.launchGame(game?.hasPreConfig ? 'GAME_CONFIG' : 'GAME_RUNNING');
-                        }}
-                        className="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 font-bold rounded-xl text-white transition-all shadow-lg shadow-violet-900/30"
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="px-3.5 py-2 bg-zinc-850 hover:bg-zinc-800 text-violet-300 border border-zinc-750 hover:border-violet-500/50 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5"
                       >
-                        Lancer la partie
+                        <Plus className="w-4 h-4 text-violet-400" />
+                        <span>Ajouter un jeu</span>
                       </button>
-                    )}
+
+                      {hub.isHost && hub.selectedGame && (
+                        <button
+                          onClick={() => {
+                            hub.launchGame(selectedGameObj?.hasPreConfig ? 'GAME_CONFIG' : 'GAME_RUNNING');
+                          }}
+                          className="px-6 py-2 bg-violet-600 hover:bg-violet-500 font-bold rounded-xl text-xs text-white transition-all shadow-lg shadow-violet-900/30"
+                        >
+                          Lancer la partie
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {AVAILABLE_GAMES.map((g) => (
-                      <button
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {allGames.map((g) => (
+                      <div
                         key={g.key}
+                        role="button"
+                        tabIndex={hub.isHost ? 0 : -1}
                         onClick={() => hub.isHost && hub.broadcastGameSelection(g.key)}
-                        disabled={!hub.isHost}
-                        className={`p-5 rounded-2xl border text-left transition-all flex flex-col justify-between gap-4 h-36 ${hub.selectedGame === g.key
+                        onKeyDown={(e) => {
+                          if (hub.isHost && (e.key === "Enter" || e.key === " ")) {
+                            hub.broadcastGameSelection(g.key);
+                          }
+                        }}
+                        className={`p-5 rounded-2xl border text-left transition-all flex flex-col justify-between gap-4 min-h-[9rem] relative group ${
+                          hub.isHost ? "cursor-pointer" : "cursor-not-allowed opacity-90"
+                        } ${hub.selectedGame === g.key
                             ? "bg-violet-950/20 border-violet-500 ring-2 ring-violet-500"
                             : "bg-zinc-950/50 border-zinc-850 hover:bg-zinc-900/30"
-                          } ${!hub.isHost ? "cursor-not-allowed" : ""}`}
+                          }`}
                       >
-                        <div>
-                          <h3 className="font-bold text-zinc-200">{g.name}</h3>
+                        <div className="space-y-1 pr-6">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <h3 className="font-bold text-zinc-200 flex items-center gap-2">
+                              <span>{g.name}</span>
+                            </h3>
+                            {g.isCustom && (
+                              <span className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                LIVE
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-zinc-400 mt-1">{g.desc}</p>
                         </div>
-                      </button>
+
+                        {g.isCustom && hub.isHost && (
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                hub.removeCustomGame(g.key);
+                              }}
+                              className="text-zinc-600 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/30 transition-colors cursor-pointer"
+                              title="Supprimer ce jeu custom"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
+
                 </div>
               </div>
             )}
@@ -192,6 +256,15 @@ export default function App() {
         </div>
       )}
 
+      {/* Modal to add custom GitHub game */}
+      <AddGameModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onGameAdded={(meta) => {
+          hub.addCustomGameMeta(meta);
+        }}
+      />
+
       {/* Persistent Single Root Voice Chat Overlay (Respects room voice chat setting) */}
       {enableHubVoice && hub.enableVoice && hub.roomId && (
         <div className="fixed top-24 left-4 z-[200]">
@@ -205,3 +278,4 @@ export default function App() {
     </>
   );
 }
+
