@@ -5,13 +5,14 @@ import { useGamesCatalog } from "./hooks/useGamesCatalog";
 import { Lobby } from "./components/game/Lobby";
 import { GameMountPanel } from "./components/game/GameMountPanel";
 import { AddGameModal } from "./components/game/AddGameModal";
+import { GameSelectionPanel } from "./components/game/GameSelectionPanel";
 import { AvatarSelector } from "./components/game/AvatarSelector";
-import { Gamepad2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Gamepad2 } from "lucide-react";
 import { SoundToggle } from "./components/ui/SoundToggle";
 import { VoiceChatPanel } from "p2play-core/voice";
 import { TextChatPanel } from "p2play-core/chat";
 import { copyRoomUrlToClipboard } from "p2play-core/url";
-import { resolveCustomMountFnName } from "./utils/customGames";
+import { resolveCustomMountFnName } from "./utils/customGameLoader";
 
 export default function App() {
   const hub = useHub();
@@ -19,6 +20,12 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const enableHubVoice = import.meta.env.VITE_ENABLE_VOICE_CHAT !== "false";
+
+  const quickExamples = useMemo(
+    () =>
+      catalogGames.flatMap((g) => (g.repo ? [{ label: g.label, slug: g.repo }] : [])),
+    [catalogGames],
+  );
 
   const allGames = useMemo(() => {
     const builtin = catalogGames.map((g) => ({
@@ -164,100 +171,26 @@ export default function App() {
                 </div>
 
                 <div className="p-6 bg-zinc-900/40 border border-zinc-850 rounded-3xl shadow-xl">
-                    <AvatarSelector
-                    selectedAvatar={hub.players.find(p => p.peerId === hub.myPeerId)?.avatar || "👑"}
+                  <AvatarSelector
+                    selectedAvatar={hub.players.find((p) => p.peerId === hub.myPeerId)?.avatar || "👑"}
                     onSelectAvatar={hub.updateAvatar}
                     gameAvatars={selectedGameObj?.avatars}
                   />
                 </div>
 
-                <div className="p-6 bg-zinc-900/40 border border-zinc-850 rounded-3xl shadow-xl space-y-6">
-                  <div className="flex justify-between items-center flex-wrap gap-3">
-                    <div>
-                      <h2 className="text-xl font-bold text-zinc-200">🎮 Sélectionner un jeu</h2>
-                      <p className="text-xs text-zinc-400">
-                        {hub.isHost
-                          ? "Choisissez le jeu de votre partie ou ajoutez un dépôt GitHub Live"
-                          : "En attente du choix de l'hôte..."}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {hub.isHost && (
-                        <button
-                          type="button"
-                          onClick={() => setIsAddModalOpen(true)}
-                          className="px-3.5 py-2 bg-zinc-850 hover:bg-zinc-800 text-violet-300 border border-zinc-750 hover:border-violet-500/50 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5"
-                        >
-                          <Plus className="w-4 h-4 text-violet-400" />
-                          <span>Ajouter un jeu</span>
-                        </button>
-                      )}
-
-                      {hub.isHost && hub.selectedGame && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            hub.launchGame(selectedGameObj?.hasPreConfig ? "GAME_CONFIG" : "GAME_RUNNING");
-                          }}
-                          className="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 font-bold rounded-xl text-white transition-all shadow-lg shadow-violet-900/30"
-                        >
-                          Lancer la partie
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {catalogError && (
-                    <p className="text-sm text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-xl px-3 py-2">
-                      {catalogError}
-                    </p>
-                  )}
-
-                  {catalogLoading ? (
-                    <p className="text-sm text-zinc-500">Chargement du catalogue de jeux…</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {allGames.map((g) => (
-                        <div key={g.key} className="relative">
-                          <button
-                            type="button"
-                            onClick={() => hub.isHost && hub.broadcastGameSelection(g.key)}
-                            disabled={!hub.isHost}
-                            className={`w-full p-5 rounded-2xl border text-left transition-all flex flex-col justify-between gap-4 min-h-[9rem] ${hub.selectedGame === g.key
-                                ? "bg-violet-950/20 border-violet-500 ring-2 ring-violet-500"
-                                : "bg-zinc-950/50 border-zinc-850 hover:bg-zinc-900/30"
-                              } ${!hub.isHost ? "cursor-not-allowed" : ""}`}
-                          >
-                            <div className="space-y-1 pr-2">
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <h3 className="font-bold text-zinc-200">{g.label}</h3>
-                                {g.isCustom && (
-                                  <span className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <Sparkles className="w-2.5 h-2.5" />
-                                    LIVE
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-zinc-400 mt-1">{g.desc}</p>
-                            </div>
-                          </button>
-
-                          {g.isCustom && hub.isHost && (
-                            <button
-                              type="button"
-                              onClick={() => hub.removeCustomGame(g.key)}
-                              className="absolute bottom-3 right-3 text-zinc-600 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/30 transition-colors"
-                              title="Supprimer ce jeu custom"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <GameSelectionPanel
+                  games={allGames}
+                  selectedGame={hub.selectedGame}
+                  isHost={hub.isHost}
+                  catalogLoading={catalogLoading}
+                  catalogError={catalogError}
+                  onSelect={hub.broadcastGameSelection}
+                  onLaunch={() =>
+                    hub.launchGame(selectedGameObj?.hasPreConfig ? "GAME_CONFIG" : "GAME_RUNNING")
+                  }
+                  onAddClick={() => setIsAddModalOpen(true)}
+                  onRemoveCustom={hub.removeCustomGame}
+                />
 
                 <TextChatPanel
                   messages={hub.chatMessages}
@@ -290,6 +223,7 @@ export default function App() {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onGameAdded={(meta) => hub.addCustomGameMeta(meta)}
+        examples={quickExamples}
       />
 
       {enableHubVoice && hub.enableVoice && hub.roomId && (

@@ -1,21 +1,26 @@
 import { useState } from "react";
 import { X, Download, AlertCircle, CheckCircle2, Loader2, Sparkles, Globe } from "lucide-react";
-import { fetchAndPrepareCustomGame, type CustomGameMeta } from "../../utils/customGames";
+import { fetchAndPrepareCustomGame, type CustomGameMeta } from "../../utils/customGameLoader";
+
+export interface QuickGameExample {
+  label: string;
+  slug: string;
+}
 
 interface AddGameModalProps {
   isOpen: boolean;
   onClose: () => void;
   onGameAdded: (meta: CustomGameMeta) => void;
+  /** Quick picks from catalog.json (repos injected from games.json at build). */
+  examples?: QuickGameExample[];
 }
 
-const EXAMPLES = [
-  { label: "💀 Skull & Roses", slug: "gab371/skull-and-roses" },
-  { label: "👑 Royal Bluff", slug: "gab371/royal-bluff" },
-  { label: "🤠 Sheriff", slug: "gab371/sheriff-smugglers" },
-  { label: "🎱 Billard", slug: "gab371/billard-p2play" },
-] as const;
-
-export function AddGameModal({ isOpen, onClose, onGameAdded }: AddGameModalProps) {
+export function AddGameModal({
+  isOpen,
+  onClose,
+  onGameAdded,
+  examples = [],
+}: AddGameModalProps) {
   const [urlInput, setUrlInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [progressMsg, setProgressMsg] = useState<string | null>(null);
@@ -98,32 +103,35 @@ export function AddGameModal({ isOpen, onClose, onGameAdded }: AddGameModalProps
                 type="text"
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="ex: gab371/skull-and-roses ou https://github.com/…"
+                placeholder="owner/repo ou https://github.com/owner/repo"
                 disabled={loading}
                 className="w-full bg-zinc-950 border border-zinc-800 focus:border-violet-500 text-zinc-100 rounded-2xl pl-11 pr-4 py-3 text-sm focus:outline-none transition-all placeholder:text-zinc-600 disabled:opacity-60"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <span className="text-[11px] text-zinc-400 font-medium">Exemples rapides :</span>
-            <div className="flex flex-wrap gap-2">
-              {EXAMPLES.map((ex) => (
-                <button
-                  key={ex.slug}
-                  type="button"
-                  onClick={() => {
-                    setUrlInput(ex.slug);
-                    setError(null);
-                  }}
-                  disabled={loading}
-                  className="px-3 py-1.5 bg-zinc-950/80 hover:bg-zinc-800 border border-zinc-850 hover:border-zinc-700 text-zinc-300 text-xs rounded-xl font-medium transition-all"
-                >
-                  {ex.label}
-                </button>
-              ))}
+          {examples.length > 0 && (
+            <div className="space-y-2">
+              <span className="text-[11px] text-zinc-400 font-medium">Exemples rapides :</span>
+              <div className="flex flex-wrap gap-2">
+                {examples.map((ex) => (
+                  <button
+                    key={ex.slug}
+                    type="button"
+                    data-quick-example={ex.slug}
+                    onClick={() => {
+                      setUrlInput(ex.slug);
+                      setError(null);
+                    }}
+                    disabled={loading}
+                    className="px-3 py-1.5 bg-zinc-950/80 hover:bg-zinc-800 border border-zinc-850 hover:border-zinc-700 text-zinc-300 text-xs rounded-xl font-medium transition-all"
+                  >
+                    {ex.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {loading && (
             <div className="p-4 bg-violet-950/20 border border-violet-850/60 rounded-2xl flex items-center gap-3">

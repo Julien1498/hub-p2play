@@ -67,7 +67,9 @@ test.describe("P2Play Hub — Live GitHub custom games", () => {
     await host.getByRole("button", { name: /Ajouter un jeu/i }).click();
     await expect(host.getByRole("dialog")).toBeVisible();
 
-    await host.getByRole("button", { name: "💀 Skull & Roses", exact: true }).click();
+    const firstExample = host.locator("[data-quick-example]").first();
+    await expect(firstExample).toBeVisible();
+    await firstExample.click();
     await host.getByRole("button", { name: /Ajouter le jeu/i }).click();
 
     const modalGone = await host

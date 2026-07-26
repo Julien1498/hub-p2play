@@ -7,13 +7,7 @@ import {
 } from "p2play-core/url";
 import { globalHubPeer } from "../network/peerManager";
 import type { GameActionMessage, HubState } from "../network/protocol";
-import {
-  loadStoredCustomGames,
-  mergeCustomGamesIntoStorage,
-  removeCustomGameFromStorage,
-  saveCustomGameToStorage,
-  type CustomGameMeta,
-} from "../utils/customGames";
+import { useCustomGames } from "./useCustomGames";
 
 export function useHub() {
   const [status, setStatus] = useState<"CONNECTING" | "CONNECTED" | "DISCONNECTED">("DISCONNECTED");
@@ -25,7 +19,14 @@ export function useHub() {
   const [isHost, setIsHost] = useState(false);
   const [enableVoice, setEnableVoice] = useState(true);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => globalHubPeer.chatHistory);
-  const [customGames, setCustomGames] = useState<CustomGameMeta[]>(() => loadStoredCustomGames());
+
+  const {
+    customGames,
+    addCustomGameMeta,
+    removeCustomGame: removeCustomGameBase,
+    syncCustomGamesFromHub,
+    seedHostCustomGames,
+  } = useCustomGames();
 
   useEffect(() => {
     // Hub owns the salon chat store. usePeer chains over this handler while a game is mounted
@@ -48,23 +49,14 @@ export function useHub() {
     globalHubPeer.updateAvatar(avatar);
   }, []);
 
-  const addCustomGameMeta = useCallback((meta: CustomGameMeta) => {
-    const updated = saveCustomGameToStorage(meta);
-    setCustomGames(updated);
-    if (globalHubPeer.isHost) {
-      globalHubPeer.setHubCustomGames(updated);
-    }
-  }, []);
-
-  const removeCustomGame = useCallback((key: string) => {
-    const updated = removeCustomGameFromStorage(key);
-    setCustomGames(updated);
-    setSelectedGame((prev) => (prev === key ? null : prev));
-    setActiveGame((prev) => (prev === key ? null : prev));
-    if (globalHubPeer.isHost) {
-      globalHubPeer.setHubCustomGames(updated);
-    }
-  }, []);
+  const removeCustomGame = useCallback(
+    (key: string) => {
+      removeCustomGameBase(key);
+      setSelectedGame((prev) => (prev === key ? null : prev));
+      setActiveGame((prev) => (prev === key ? null : prev));
+    },
+    [removeCustomGameBase],
+  );
 
   const broadcastGameSelection = useCallback((gameKey: string) => {
     setSelectedGame(gameKey);
@@ -145,12 +137,8 @@ export function useHub() {
       setSelectedGame(state.selectedGame);
       setActiveGame(state.activeGame);
       setGameConfig(state.gameConfig);
-      if (state.enableVoice !== undefined) {
-        setEnableVoice(state.enableVoice);
-      }
-      if (Array.isArray(state.customGames)) {
-        setCustomGames(mergeCustomGamesIntoStorage(state.customGames));
-      }
+      if (state.enableVoice !== undefined) setEnableVoice(state.enableVoice);
+      if (Array.isArray(state.customGames)) syncCustomGamesFromHub(state.customGames);
     };
 
     globalHubPeer.onMessage = (_sender, data: GameActionMessage) => {
@@ -175,16 +163,16 @@ export function useHub() {
       globalHubPeer.onHubStateUpdate = null;
       globalHubPeer.onMessage = null;
     };
-  }, [status, roomId]);
+  }, [status, roomId, syncCustomGamesFromHub]);
 
   const createRoom = useCallback(
     (roomName: string, username: string, avatar: string = "👑", voiceEnabled: boolean = true) => {
       setIsHost(true);
       setEnableVoice(voiceEnabled);
-      globalHubPeer.customGames = loadStoredCustomGames();
+      seedHostCustomGames();
       globalHubPeer.initialize(true, roomName, username, avatar, voiceEnabled);
     },
-    [],
+    [seedHostCustomGames],
   );
 
   const joinRoom = useCallback((roomName: string, username: string, avatar: string = "👑") => {

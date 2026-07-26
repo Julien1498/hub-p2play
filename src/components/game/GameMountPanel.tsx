@@ -10,7 +10,7 @@ import {
   loadStoredCustomGames,
   resolveCustomMountFnName,
   type CustomGameMeta,
-} from "../../utils/customGames";
+} from "../../utils/customGameLoader";
 
 const FALLBACK_SHELL_BACKGROUND =
   "radial-gradient(circle at center, #09090b 0%, #09090b 100%)";
