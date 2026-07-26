@@ -193,7 +193,7 @@ async function fetchViaProxy(url: string, acceptHeader: string = 'application/oc
 
   // 2. Client-side CORS Proxy 1 (corsproxy.io - works statically on GitHub Pages)
   try {
-    const corsProxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const corsProxyUrl = ``;
     const res = await fetch(corsProxyUrl, {
       headers: { 'Accept': acceptHeader }
     });
@@ -204,7 +204,7 @@ async function fetchViaProxy(url: string, acceptHeader: string = 'application/oc
 
   // 3. Client-side CORS Proxy 2 (api.allorigins.win)
   try {
-    const allOriginsUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const allOriginsUrl = ``;
     const res = await fetch(allOriginsUrl, {
       headers: { 'Accept': acceptHeader }
     });
