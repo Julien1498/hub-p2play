@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node download-games.js && vite",
+    "catalog": "node download-games.js --catalog-only",
     "prebuild": "node download-games.js",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
@@ -18,7 +19,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.25.0",
-    "p2play-core": "github:gab371/p2play-core#v0.3.3",
+    "p2play-core": "github:gab371/p2play-core#v0.3.5",
     "peerjs": "^1.5.5",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

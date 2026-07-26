@@ -58,7 +58,7 @@ Open your browser at `http://localhost:3004`.
 
 ## ⚙️ Game Configuration (`games.json`)
 
-To update a game version or add a new title, edit `games.json`:
+`games.json` only pins **GitHub releases to download** (repo + version). Display name / description come from each game's own `hub-manifest.json` (declared via `p2play-core`).
 
 ```json
 {
@@ -78,3 +78,5 @@ To update a game version or add a new title, edit `games.json`:
   }
 }
 ```
+
+After `node download-games.js`, Hub serves `public/games/catalog.json` aggregated from each `hub-manifest.json`. Removing a game from `games.json` removes it from the picker on the next download (orphan folders are pruned).

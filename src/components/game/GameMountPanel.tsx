@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import type { PeerManagerLike } from "p2play-core";
+import { defaultHubMountFnName, type PeerManagerLike } from "p2play-core";
 import {
   activateGameStyle,
   unloadAllGameStyles,
-  GAME_SHELL_BACKGROUNDS,
 } from "../../utils/gameStyles";
+
+const FALLBACK_SHELL_BACKGROUND =
+  "radial-gradient(circle at center, #09090b 0%, #09090b 100%)";
 
 interface GameMountPanelProps {
   gameName: string;
@@ -16,18 +18,20 @@ interface GameMountPanelProps {
   lateJoin?: boolean;
   gameConfig?: any;
   hubPhase?: string;
+  /** From hub-manifest.json; defaults to mount{Key}. */
+  mountFnName?: string;
+  /** From hub-manifest.json `shellBackground`. */
+  shellBackground?: string;
   onExit: () => void;
   onLeave?: () => void;
 }
 
-export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, externalPeerManager, isHost, lateJoin, gameConfig, hubPhase, onExit, onLeave }: GameMountPanelProps) {
+export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, externalPeerManager, isHost, lateJoin, gameConfig, hubPhase, mountFnName, shellBackground, onExit, onLeave }: GameMountPanelProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const shellBackground =
-    GAME_SHELL_BACKGROUNDS[gameName] ?? "radial-gradient(circle at center, #09090b 0%, #09090b 100%)";
-
+  const resolvedShellBackground = shellBackground ?? FALLBACK_SHELL_BACKGROUND;
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
     let unmountGame: (() => void) | null = null;
@@ -64,11 +68,11 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
 
         if (cancelled) return;
 
-        const mountFnName = `mount${gameName.charAt(0).toUpperCase() + gameName.slice(1)}`;
-        const mountFn = (window as any)[mountFnName];
+        const resolvedMountFnName = mountFnName ?? defaultHubMountFnName(gameName);
+        const mountFn = (window as any)[resolvedMountFnName];
 
         if (typeof mountFn !== "function") {
-          throw new Error(`Fonction de montage "${mountFnName}" introuvable sur window.`);
+          throw new Error(`Fonction de montage "${resolvedMountFnName}" introuvable sur window.`);
         }
 
         if (mountRef.current) {
@@ -120,12 +124,12 @@ export function GameMountPanel({ gameName, peerId, playerName, playerAvatar, ext
         mountRef.current.innerHTML = "";
       }
     };
-  }, [gameName, peerId]);
+  }, [gameName, peerId, mountFnName]);
 
   return (
     <div
       className="fixed inset-0 z-50 w-screen h-screen flex flex-col overflow-hidden"
-      style={{ background: shellBackground }}
+      style={{ background: resolvedShellBackground }}
       data-p2play-game-shell={gameName}
     >
       {isHost ? (

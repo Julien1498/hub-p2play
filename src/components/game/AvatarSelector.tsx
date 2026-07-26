@@ -3,29 +3,22 @@ import { useState } from "react";
 interface AvatarSelectorProps {
   selectedAvatar: string;
   onSelectAvatar: (avatar: string) => void;
-  selectedGameKey?: string | null;
+  /** From hub-manifest.json `avatars` for the selected game. */
+  gameAvatars?: string[];
   /** Home card is narrow → grid. Room panel is wide → single-line wrap. */
   layout?: "grid" | "wrap";
 }
 
 const P2PLAY_AVATARS = ["👑", "🎮", "🤠", "🦊", "🐯", "🦉", "🦁", "🐍", "🎱", "🎯", "🚀", "💎", "🎲", "🏆"];
 
-const GAME_AVATARS: Record<string, string[]> = {
-  skull: ["💀", "🌹", "🦊", "🐯", "🦉", "🐍"],
-  royal: ["👑", "🏰", "🗡️", "⚜️", "🪙", "🛡️", "🦁", "🦅"],
-  sheriff: ["🤠", "👩‍🌾", "🧙‍♂️", "👨‍🍳", "👰‍♀️", "🤵‍♂️", "🌵", "🐎"],
-  pool: ["🎱", "🎯", "🔥", "👑", "🏆", "🤠"]
-};
-
 export function AvatarSelector({
   selectedAvatar,
   onSelectAvatar,
-  selectedGameKey,
+  gameAvatars = [],
   layout = "wrap",
 }: AvatarSelectorProps) {
-  const [tab, setTab] = useState<'p2play' | 'game'>('p2play');
+  const [tab, setTab] = useState<"p2play" | "game">("p2play");
 
-  const currentGameAvatars = selectedGameKey ? GAME_AVATARS[selectedGameKey] || [] : [];
   const gridClass =
     layout === "grid"
       ? "grid grid-cols-7 gap-2 p-3 bg-zinc-950 border border-zinc-850 rounded-2xl justify-items-center"
@@ -40,21 +33,21 @@ export function AvatarSelector({
         <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-850 text-xs">
           <button
             type="button"
-            onClick={() => setTab('p2play')}
+            onClick={() => setTab("p2play")}
             className={`px-3 py-1 rounded-lg font-bold transition-all ${
-              tab === 'p2play'
+              tab === "p2play"
                 ? "bg-violet-600 text-white shadow"
                 : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
             P2Play
           </button>
-          {selectedGameKey && currentGameAvatars.length > 0 && (
+          {gameAvatars.length > 0 && (
             <button
               type="button"
-              onClick={() => setTab('game')}
+              onClick={() => setTab("game")}
               className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'game'
+                tab === "game"
                   ? "bg-violet-600 text-white shadow"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
@@ -66,7 +59,7 @@ export function AvatarSelector({
       </div>
 
       <div className={gridClass}>
-        {(tab === 'p2play' ? P2PLAY_AVATARS : currentGameAvatars).map((avatar) => (
+        {(tab === "p2play" ? P2PLAY_AVATARS : gameAvatars).map((avatar) => (
           <button
             key={avatar}
             type="button"

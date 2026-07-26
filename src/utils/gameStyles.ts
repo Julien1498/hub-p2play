@@ -5,17 +5,10 @@
  * Game background gradients are painted on the mount shell (not body) —
  * a fixed fullscreen shell takes body out of flow, so body{background}
  * does not cover the viewport and the browser default (white) shows through.
+ * Per-game shell colors come from hub-manifest.json `shellBackground`.
  */
 
 const GAME_STYLE_PREFIX = "game-style-";
-
-/** Matches each game's `body { background: ... }` in its index.css. */
-export const GAME_SHELL_BACKGROUNDS: Record<string, string> = {
-  skull: "radial-gradient(circle at center, #1b0a0f 0%, #09090b 100%)",
-  royal: "radial-gradient(circle at center, #1b160a 0%, #09090b 100%)",
-  sheriff: "radial-gradient(circle at center, #1b1206 0%, #09090b 100%)",
-  pool: "radial-gradient(circle at center, #0a1f1a 0%, #09090b 100%)",
-};
 
 export const HUB_SHELL_BACKGROUND =
   "radial-gradient(circle at center, #130f24 0%, #09090b 100%)";

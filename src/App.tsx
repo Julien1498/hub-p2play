@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useHub } from "./hooks/useHub";
+import { useGamesCatalog } from "./hooks/useGamesCatalog";
 import { Lobby } from "./components/game/Lobby";
 import { GameMountPanel } from "./components/game/GameMountPanel";
 import { AvatarSelector } from "./components/game/AvatarSelector";
@@ -10,6 +11,7 @@ import { copyRoomUrlToClipboard } from "p2play-core/url";
 
 export default function App() {
   const hub = useHub();
+  const { games: availableGames, loading: catalogLoading, error: catalogError } = useGamesCatalog();
   const [copied, setCopied] = useState(false);
   const enableHubVoice = import.meta.env.VITE_ENABLE_VOICE_CHAT !== "false";
 
@@ -26,16 +28,8 @@ export default function App() {
 
   const showLobby = !hub.roomId;
 
-  const AVAILABLE_GAMES = [
-    { key: "skull", name: "💀 Skull & Roses", desc: "Mises, Bluff & Roses.", hasPreConfig: true },
-    { key: "royal", name: "👑 Royal Bluff (Coup)", desc: "Influence & Rôles cachés.", hasPreConfig: true },
-    { key: "sheriff", name: "🤠 Sheriff & Smugglers", desc: "Négociation & Pots-de-vin.", hasPreConfig: true },
-    { key: "pool", name: "🎱 P2Play Billards", desc: "Billard par équipes + spectateurs.", hasPreConfig: false }
-  ];
-
   return (
     <>
-      {/* Active Game Shell OR Main Hub Interface */}
       {hub.activeGame ? (
         <GameMountPanel
           gameName={hub.activeGame}
@@ -47,15 +41,15 @@ export default function App() {
           lateJoin={!hub.isHost}
           gameConfig={hub.gameConfig}
           hubPhase={hub.hubPhase}
+          mountFnName={availableGames.find((g) => g.key === hub.activeGame)?.mountFn}
+          shellBackground={availableGames.find((g) => g.key === hub.activeGame)?.shellBackground}
           onExit={hub.returnToHub}
           onLeave={hub.disconnect}
         />
       ) : (
         <div className="min-h-screen text-zinc-50 font-sans flex flex-col justify-between relative">
-          {/* Background radial decoration */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(139,92,246,0.08),transparent_70%)] pointer-events-none" />
 
-          {/* Header */}
           <header className="max-w-7xl mx-auto w-full flex items-center justify-between py-6 px-4 border-b border-zinc-900 relative z-10">
             <div className="flex items-center gap-3">
               <Gamepad2 className="w-6 h-6 text-[#8b5cf6] animate-pulse" />
@@ -101,7 +95,6 @@ export default function App() {
             </div>
           </header>
 
-          {/* Main content */}
           <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-8 relative z-10">
             {showLobby ? (
               <Lobby
@@ -130,12 +123,11 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Avatar Selector in room */}
                 <div className="p-6 bg-zinc-900/40 border border-zinc-850 rounded-3xl shadow-xl">
-                  <AvatarSelector
+                    <AvatarSelector
                     selectedAvatar={hub.players.find(p => p.peerId === hub.myPeerId)?.avatar || "👑"}
                     onSelectAvatar={hub.updateAvatar}
-                    selectedGameKey={hub.selectedGame}
+                    gameAvatars={availableGames.find((g) => g.key === hub.selectedGame)?.avatars}
                   />
                 </div>
 
@@ -150,7 +142,7 @@ export default function App() {
                     {hub.isHost && hub.selectedGame && (
                       <button
                         onClick={() => {
-                          const game = AVAILABLE_GAMES.find((g) => g.key === hub.selectedGame);
+                          const game = availableGames.find((g) => g.key === hub.selectedGame);
                           hub.launchGame(game?.hasPreConfig ? 'GAME_CONFIG' : 'GAME_RUNNING');
                         }}
                         className="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 font-bold rounded-xl text-white transition-all shadow-lg shadow-violet-900/30"
@@ -160,24 +152,34 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {AVAILABLE_GAMES.map((g) => (
-                      <button
-                        key={g.key}
-                        onClick={() => hub.isHost && hub.broadcastGameSelection(g.key)}
-                        disabled={!hub.isHost}
-                        className={`p-5 rounded-2xl border text-left transition-all flex flex-col justify-between gap-4 h-36 ${hub.selectedGame === g.key
-                            ? "bg-violet-950/20 border-violet-500 ring-2 ring-violet-500"
-                            : "bg-zinc-950/50 border-zinc-850 hover:bg-zinc-900/30"
-                          } ${!hub.isHost ? "cursor-not-allowed" : ""}`}
-                      >
-                        <div>
-                          <h3 className="font-bold text-zinc-200">{g.name}</h3>
-                          <p className="text-xs text-zinc-400 mt-1">{g.desc}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                  {catalogError && (
+                    <p className="text-sm text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-xl px-3 py-2">
+                      {catalogError}
+                    </p>
+                  )}
+
+                  {catalogLoading ? (
+                    <p className="text-sm text-zinc-500">Chargement du catalogue de jeux…</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {availableGames.map((g) => (
+                        <button
+                          key={g.key}
+                          onClick={() => hub.isHost && hub.broadcastGameSelection(g.key)}
+                          disabled={!hub.isHost}
+                          className={`p-5 rounded-2xl border text-left transition-all flex flex-col justify-between gap-4 h-36 ${hub.selectedGame === g.key
+                              ? "bg-violet-950/20 border-violet-500 ring-2 ring-violet-500"
+                              : "bg-zinc-950/50 border-zinc-850 hover:bg-zinc-900/30"
+                            } ${!hub.isHost ? "cursor-not-allowed" : ""}`}
+                        >
+                          <div>
+                            <h3 className="font-bold text-zinc-200">{g.label}</h3>
+                            <p className="text-xs text-zinc-400 mt-1">{g.desc}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -197,7 +199,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Persistent Single Root Voice Chat Overlay (Respects room voice chat setting) */}
       {enableHubVoice && hub.enableVoice && hub.roomId && (
         <div className="fixed top-24 left-4 z-[200]">
           <VoiceChatPanel
