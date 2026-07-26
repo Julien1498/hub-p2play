@@ -210,16 +210,17 @@ for (const deck of ROYAL_DECKS) {
   });
 }
 
-// --- Sheriff: host must pick a deck theme, then click the in-game "Lancer la Partie" --
+// --- Sheriff: host picks a deck theme, guest readies, then host starts ----------
 //
-// The updated Sheriff game no longer auto-starts in embedded mode: it shows the
-// saloon lobby so the host can choose the deck theme (Western / Médiéval /
-// Moderne) before starting. We exercise two different decks to verify the
-// selection propagates to the guest and the game still launches a round.
+// Sheriff v0.3.0 no longer auto-starts in embedded mode: it shows the
+// "Saloon des Marchands" lobby so the host can choose the deck theme
+// (Far West / Médiéval / Moderne). Launch is gated on all guests being ready
+// (same pattern as Skull / Royal). Guests no longer see a read-only "Actif"
+// line for the theme — only the host sees the selector.
 
 const SHERIFF_DECKS = [
-  { key: "MEDIEVAL", label: "🏰 Médiéval", active: /Actif : 🏰 Médiéval/ },
-  { key: "MODERN", label: "🏙️ Moderne", active: /Actif : 🏙️ Moderne/ },
+  { key: "MEDIEVAL", label: /Médiéval/ },
+  { key: "MODERN", label: /Moderne/ },
 ];
 
 for (const deck of SHERIFF_DECKS) {
@@ -230,28 +231,31 @@ for (const deck of SHERIFF_DECKS) {
       await launchFromHub(host, "Sheriff");
 
       // The saloon lobby (with the deck selector) must appear.
-      await expect(host.getByText(/THÈME DU DECK/i)).toBeVisible({ timeout: 40000 });
+      await expect(host.getByText(/Saloon des Marchands/i)).toBeVisible({ timeout: 40000 });
+      await expect(host.getByText(/paquet/i)).toBeVisible({ timeout: 15000 });
 
       // Host picks the deck theme.
       const deckBtn = host.locator("button", { hasText: deck.label }).first();
       await expect(deckBtn).toBeEnabled();
       await deckBtn.click();
 
-      // The deck choice must propagate to the guest (read-only "Actif : …").
-      await expect(guest.getByText(deck.active)).toBeVisible({ timeout: 15000 });
+      // Guest must ready up before the host can start.
+      const readyBtn = guest.getByRole("button", { name: /Je suis pr/i }).first();
+      await expect(readyBtn).toBeEnabled({ timeout: 15000 });
+      await readyBtn.click();
 
-      // Host starts the game from the saloon lobby.
-      const inGameLaunch = host.getByRole("button", { name: /^Lancer la Partie$/ }).first();
-      await expect(inGameLaunch).toBeEnabled();
+      // Host starts from the saloon lobby (enabled once guest is ready).
+      const inGameLaunch = host.getByRole("button", { name: /Lancer la partie/i }).first();
+      await expect(inGameLaunch).toBeEnabled({ timeout: 15000 });
       await inGameLaunch.click();
 
       // The board must appear (round 1 started).
       await waitForBoard(host, /Manche \d+ \//, "sheriff-" + deck.key);
-      expect(/Marchands connectés/.test((await host.locator("body").innerText()) ?? ""),
+      expect(/Saloon des Marchands/.test((await host.locator("body").innerText()) ?? ""),
         "sheriff: saloon lobby should be gone").toBe(false);
 
       // Round in progress: the host is the SHÉRIF, waiting for merchants' cargo.
-      await expect(host.getByText(/En attente.*préparent leur cargaison/i)).toBeVisible({
+      await expect(host.getByText(/En attente.*pr.parent leur cargaison/i)).toBeVisible({
         timeout: 15000,
       });
 
