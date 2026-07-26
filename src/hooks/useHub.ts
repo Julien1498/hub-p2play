@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import type { ChatMessage } from "p2play-core";
 import {
   clearRoomUrlFromAddressBar,
   subscribeForeignRoomReload,
   syncRoomUrlToAddressBar,
 } from "p2play-core/url";
 import { globalHubPeer } from "../network/peerManager";
-import type { GameActionMessage, HubState } from "../network/protocol";
 
 export function useHub() {
   const [status, setStatus] = useState<'CONNECTING' | 'CONNECTED' | 'DISCONNECTED'>('DISCONNECTED');
@@ -16,6 +16,24 @@ export function useHub() {
   const [gameConfig, setGameConfig] = useState<any>(null);
   const [isHost, setIsHost] = useState(false);
   const [enableVoice, setEnableVoice] = useState(true);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => globalHubPeer.chatHistory);
+
+  useEffect(() => {
+    // Hub owns the salon chat store. usePeer chains over this handler while a game is mounted
+    // and restores it on unmount — do not null onChatReceived here.
+    globalHubPeer.onChatReceived = () => {
+      setChatMessages([...globalHubPeer.chatHistory]);
+    };
+    globalHubPeer.onChatHistorySync = (msgs) => {
+      setChatMessages([...msgs]);
+    };
+  }, []);
+
+  const sendChat = useCallback((text: string) => {
+    const localPlayer = globalHubPeer.lobbyPlayers.find(p => p.peerId === globalHubPeer.myPeerId);
+    const sender = localPlayer?.username || globalHubPeer.username || "Joueur";
+    globalHubPeer.sendChat(sender, text);
+  }, []);
 
   const updateAvatar = useCallback((avatar: string) => {
     globalHubPeer.updateAvatar(avatar);
@@ -85,14 +103,16 @@ export function useHub() {
       setPlayers([...globalHubPeer.lobbyPlayers]);
     };
 
-    globalHubPeer.onHubStateUpdate = (state: HubState) => {
+    globalHubPeer.onHubStateUpdate = (state) => {
       setSelectedGame(state.selectedGame);
       setActiveGame(state.activeGame);
       setGameConfig(state.gameConfig);
-      if (state.enableVoice !== undefined) setEnableVoice(state.enableVoice);
+      if (state.enableVoice !== undefined) {
+        setEnableVoice(state.enableVoice);
+      }
     };
 
-    globalHubPeer.onMessage = (sender, data: GameActionMessage) => {
+    globalHubPeer.onMessage = (_sender, data) => {
       switch (data.type) {
         case 'SELECT_GAME':
           setSelectedGame(data.payload);
@@ -114,7 +134,7 @@ export function useHub() {
       globalHubPeer.onHubStateUpdate = null;
       globalHubPeer.onMessage = null;
     };
-  }, []);
+  }, [status, roomId]);
 
   const createRoom = useCallback((roomName: string, username: string, avatar: string = "👑", voiceEnabled: boolean = true) => {
     setIsHost(true);
@@ -133,6 +153,7 @@ export function useHub() {
     setActiveGame(null);
     setSelectedGame(null);
     setGameConfig(null);
+    setChatMessages([]);
     clearRoomUrlFromAddressBar();
   }, []);
 
@@ -144,17 +165,20 @@ export function useHub() {
     selectedGame,
     activeGame,
     gameConfig,
+    phase: globalHubPeer.phase,
     hubPhase: globalHubPeer.phase,
     isHost,
     enableVoice,
+    chatMessages,
+    sendChat,
     createRoom,
     joinRoom,
     updateAvatar,
-    updateGameConfig,
-    disconnect,
     broadcastGameSelection,
     launchGame,
+    updateGameConfig,
     returnToHub,
+    disconnect,
     externalPeerManager: globalHubPeer
   };
 }

@@ -7,6 +7,7 @@ import { AvatarSelector } from "./components/game/AvatarSelector";
 import { Gamepad2 } from "lucide-react";
 import { SoundToggle } from "./components/ui/SoundToggle";
 import { VoiceChatPanel } from "p2play-core/voice";
+import { TextChatPanel } from "p2play-core/chat";
 import { copyRoomUrlToClipboard } from "p2play-core/url";
 
 export default function App() {
@@ -181,6 +182,16 @@ export default function App() {
                     </div>
                   )}
                 </div>
+
+                <TextChatPanel
+                  messages={hub.chatMessages}
+                  onSend={hub.sendChat}
+                  title="Chat du Salon"
+                  placeholder="Discuter avec le salon…"
+                  emptyLabel="Aucun message. L'historique est conservé entre les jeux."
+                  className="bg-zinc-900/40 border border-zinc-850 rounded-3xl p-5 shadow-xl flex flex-col text-zinc-100 text-sm"
+                  maxHeight="220px"
+                />
               </div>
             )}
           </main>

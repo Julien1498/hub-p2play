@@ -38,12 +38,15 @@ export class HubPeerManager implements PeerManagerLike {
   public avatar: string = "👑";
   public lobbyPlayers: { peerId: string; username: string; avatar: string }[] = [];
   public enableVoice: boolean = true;
+  public chatHistory: ChatMessage[] = [];
+  public onChatHistorySync: ((messages: ChatMessage[]) => void) | null = null;
 
   public initialize(isHost: boolean, roomId: string, username: string, avatar: string = "👑", enableVoice: boolean = true) {
     this.isHost = isHost;
     this.username = username;
     this.avatar = avatar;
     this.enableVoice = enableVoice;
+    this.chatHistory = [];
     this.lobbyPlayers = [{ peerId: isHost ? roomId : "", username, avatar }];
     
     const peerId = isHost 
@@ -121,6 +124,7 @@ export class HubPeerManager implements PeerManagerLike {
         this.broadcast({ type: 'SYNC_LOBBY', payload: this.lobbyPlayers });
         // Sync the current Hub state (selected game / active game / config) to the late joiner
         this.send(data.sender, { type: 'SYNC_HUB_STATE', payload: this.getHubState(), sender: this.myPeerId || "" });
+        this.send(data.sender, { type: 'CHAT_HISTORY_SYNC', messages: this.chatHistory });
         if (this.onPlayersUpdate) this.onPlayersUpdate();
       } else if (data.type === 'UPDATE_AVATAR' && this.isHost) {
         const player = this.lobbyPlayers.find(p => p.peerId === data.sender);
@@ -158,8 +162,15 @@ export class HubPeerManager implements PeerManagerLike {
           if (this.onStateReceived && data.state) this.onStateReceived(data.state);
           return;
         case 'CHAT':
+          this.chatHistory = [...this.chatHistory.slice(-199), data];
           if (this.onChatReceived) this.onChatReceived(data);
           if (this.isHost) this.broadcast(data, conn.peer); // relay to other merchants
+          return;
+        case 'CHAT_HISTORY_SYNC':
+          if (data.messages && Array.isArray(data.messages)) {
+            this.chatHistory = data.messages;
+            if (this.onChatHistorySync) this.onChatHistorySync(this.chatHistory);
+          }
           return;
         case 'AUDIO_EVENT':
           if (this.onAudioReceived && data.sfx) this.onAudioReceived(data.sfx);
@@ -288,9 +299,10 @@ export class HubPeerManager implements PeerManagerLike {
       text,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
+    this.chatHistory = [...this.chatHistory.slice(-199), chatMsg];
+    this.onChatReceived?.(chatMsg);
     if (this.isHost) {
       this.broadcast(chatMsg);
-      if (this.onChatReceived) this.onChatReceived(chatMsg);
     } else if (this.hostPeerId) {
       const conn = this.connections.get(this.hostPeerId);
       if (conn && conn.open) conn.send(chatMsg);
@@ -343,6 +355,7 @@ export class HubPeerManager implements PeerManagerLike {
     this.activeGame = null;
     this.gameConfig = null;
     this.phase = 'HUB_LOBBY';
+    this.chatHistory = [];
     if (this.onStatusChange) this.onStatusChange('DISCONNECTED');
   }
 }
