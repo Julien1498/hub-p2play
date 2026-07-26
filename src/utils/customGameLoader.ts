@@ -181,7 +181,7 @@ export function createBlobUrls(key: string, bundle: { jsCode: string; cssCode?: 
 
 async function fetchViaProxy(url: string, acceptHeader: string = 'application/octet-stream'): Promise<Response> {
   const proxyUrl = `/api/github-proxy?url=${encodeURIComponent(url)}`;
-  
+
   try {
     const res = await fetch(proxyUrl, {
       headers: { 'Accept': acceptHeader }
@@ -193,7 +193,7 @@ async function fetchViaProxy(url: string, acceptHeader: string = 'application/oc
 
   // Fallback 1: CORS proxy fallback
   try {
-    const fallbackUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const fallbackUrl = ``;
     const res = await fetch(fallbackUrl, {
       headers: { 'Accept': acceptHeader }
     });
