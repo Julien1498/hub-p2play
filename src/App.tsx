@@ -6,6 +6,7 @@ import { AvatarSelector } from "./components/game/AvatarSelector";
 import { Gamepad2 } from "lucide-react";
 import { SoundToggle } from "./components/ui/SoundToggle";
 import { VoiceChatPanel } from "p2play-core/voice";
+import { copyRoomUrlToClipboard } from "p2play-core/url";
 
 export default function App() {
   const hub = useHub();
@@ -14,9 +15,11 @@ export default function App() {
 
   const handleCopy = () => {
     if (hub.roomId) {
-      navigator.clipboard.writeText(hub.roomId).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+      copyRoomUrlToClipboard(hub.roomId).then((success) => {
+        if (success) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }
       });
     }
   };
@@ -81,9 +84,11 @@ export default function App() {
                   </span>
                   <button
                     onClick={handleCopy}
-                    className="px-2.5 py-1.5 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 font-bold rounded-xl border border-zinc-750 transition-all"
+                    className="px-2.5 py-1.5 bg-violet-950/40 hover:bg-violet-900/40 text-violet-300 font-bold rounded-xl border border-violet-800/50 transition-all flex items-center gap-1"
+                    title="Copier le lien d'invitation direct pour ce salon"
                   >
-                    {copied ? "Copié !" : "Copier"}
+                    <span>🔗</span>
+                    <span>{copied ? "Lien copié !" : "Copier le lien"}</span>
                   </button>
                   <button
                     onClick={hub.disconnect}
@@ -179,7 +184,7 @@ export default function App() {
           </main>
 
           <footer className="max-w-7xl mx-auto w-full text-center text-[10px] text-zinc-600 py-6 px-4 border-t border-zinc-900 flex justify-between items-center">
-            <div>hub-p2play - Réseau Privé Peer-to-Peer - Version v0.1.0</div>
+            <div>hub-p2play - Réseau Privé Peer-to-Peer - Version v0.3.0</div>
             <a
               href="https://github.com/gab371/hub-p2play"
               target="_blank"

@@ -1,29 +1,30 @@
-# 🛠️ Developer Guide: Add a New Game to P2Play Hub
+﻿# ðŸ› ï¸ Developer Guide: Add a New Game to P2Play Hub
 
 This step-by-step guide explains how to adapt an existing React/TypeScript game or create a new one compatible with **P2Play Hub** using the unified **[`p2play-core`](https://github.com/gab371/p2play-core)** package.
 
 ---
 
-## 📋 Integration Checklist
+## ðŸ“‹ Integration Checklist
 
-- [ ] **Step 1**: Install `p2play-core` in your game (`npm i github:gab371/p2play-core#v0.2.0`).
+- [ ] **Step 1**: Install `p2play-core` in your game (`npm i github:gab371/p2play-core#v0.3.3`).
 - [ ] **Step 2**: Configure dual build modes (`standalone` & `lib`) in `vite.config.ts`.
 - [ ] **Step 3**: Expose `window.mountXxx` in `src/main.tsx`.
 - [ ] **Step 4**: Use `usePeer` from `p2play-core` to manage P2P connections (standalone and `externalPeerManager`).
-- [ ] **Step 5**: Adapt `useGame.ts` / `App.tsx` to auto-populate players and bypass local home screen when `isEmbedded` is active.
-- [ ] **Step 6**: Configure CI/CD GitHub Actions workflow (`deploy.yml`) to build `dist.zip` and `standalone.zip`.
-- [ ] **Step 7**: Register game entry and version in Hub's `games.json`.
+- [ ] **Step 5**: Use shared `<P2PlayLobby />` for the standalone home screen (themed + `classes`); keep connected-room lobby game-specific.
+- [ ] **Step 6**: Adapt `useGame.ts` / `App.tsx` to auto-populate players and bypass local home screen when `isEmbedded` is active.
+- [ ] **Step 7**: Configure CI/CD GitHub Actions workflow (`deploy.yml`) to build `dist.zip` and `standalone.zip`.
+- [ ] **Step 8**: Register game entry and version in Hub's `games.json`.
 
 ---
 
-## 🛠️ Step-by-Step Instructions
+## ðŸ› ï¸ Step-by-Step Instructions
 
 ### Step 1: Install `p2play-core`
 
 Add `p2play-core` to your game's `package.json`:
 
 ```bash
-npm install github:gab371/p2play-core#v0.2.0
+npm install github:gab371/p2play-core#v0.3.3
 ```
 
 ---
@@ -145,7 +146,36 @@ Passing `externalPeerManager` reuses Hub's WebRTC connection without instantiati
 
 ---
 
-### Step 5: Direct Bypass & Embedded Pre-Game Configuration (`useGame.ts`)
+### Step 5: Shared home lobby (`P2PlayLobby`)
+
+Do **not** reimplement the create/join form. Use `<P2PlayLobby />` from `p2play-core` for the standalone home screen, and keep your connected-room lobby (ready / spectators / config) game-specific.
+
+```tsx
+import { P2PlayLobby } from 'p2play-core';
+
+<P2PlayLobby
+  title="MY GAME"
+  theme="amber" // also colors URL invitation badge â€” required even with Tailwind classes
+  status={status}
+  error={error}
+  showVoiceToggle={false}
+  compactHostSection
+  joinLayout="side-by-side"
+  onHost={(name, avatar) => hostRoom(name, avatar)}
+  onJoin={(name, avatar, code) => joinRoom(name, avatar, code)}
+  classes={{
+    root: "max-w-md mx-auto p-8 bg-zinc-900/80 ...",
+    urlNotice: "p-5 bg-zinc-950 border border-zinc-800 rounded-2xl ...",
+    // â€¦title, buttons, etc.
+  }}
+/>
+```
+
+Full theming / invitation docs: [`p2play-core` Lobby Guide](https://github.com/gab371/p2play-core/blob/main/docs/lobby-guide.md).
+
+---
+
+### Step 6: Direct Bypass & Embedded Pre-Game Configuration (`useGame.ts`)
 
 In `src/hooks/useGame.ts`, add embedded checks to populate players automatically from `peerManager.lobbyPlayers` while staying in `LOBBY` phase if your game features pre-game deck/rule configuration:
 
@@ -163,13 +193,13 @@ In `src/hooks/useGame.ts`, add embedded checks to populate players automatically
     if (options?.isEmbedded && options?.externalPeerManager && engine.state.phase === 'LOBBY') {
       engine.state.players = [];
       const hostName = options.playerName || "Host";
-      const hostAvatar = options.playerAvatar || "👑";
+      const hostAvatar = options.playerAvatar || "ðŸ‘‘";
       engine.addPlayer(myPeerId!, hostName, hostAvatar, true);
 
       if (peerManager.lobbyPlayers) {
         peerManager.lobbyPlayers.forEach((p: any) => {
           if (p.peerId && p.peerId !== myPeerId) {
-            engine.addPlayer(p.peerId, p.username || `Player ${p.peerId.slice(0, 4)}`, p.avatar || "👤", false);
+            engine.addPlayer(p.peerId, p.username || `Player ${p.peerId.slice(0, 4)}`, p.avatar || "ðŸ‘¤", false);
           }
         });
       }
@@ -183,7 +213,7 @@ In `src/hooks/useGame.ts`, add embedded checks to populate players automatically
 
 ---
 
-### Step 6: CI/CD Pipeline (`.github/workflows/deploy.yml`)
+### Step 7: CI/CD Pipeline (`.github/workflows/deploy.yml`)
 
 Configure GitHub Actions workflow to build dual archives and create GitHub Releases:
 
@@ -231,7 +261,7 @@ jobs:
 
 ---
 
-### Step 7: Register in Hub `games.json`
+### Step 8: Register in Hub `games.json`
 
 In `hub-p2play`, add your game entry to `games.json`:
 
@@ -250,8 +280,8 @@ Run `node download-games.js` in Hub to download, extract, and play your game ins
 
 ---
 
-## 🎙️ Voice Chat & Spectator Mode
+## ðŸŽ™ï¸ Voice Chat & Spectator Mode
 
 `p2play-core` provides `p2play-core/voice` and `p2play-core/spectator` modules. Read the dedicated guides:
-- 👁️ **[`p2play-core` Spectator Guide](https://github.com/gab371/p2play-core/blob/main/docs/spectator-guide.md)**
-- 🎙️ **[`p2play-core` Voice Chat Guide](https://github.com/gab371/p2play-core/blob/main/docs/voice-chat-guide.md)**
+- ðŸ‘ï¸ **[`p2play-core` Spectator Guide](https://github.com/gab371/p2play-core/blob/main/docs/spectator-guide.md)**
+- ðŸŽ™ï¸ **[`p2play-core` Voice Chat Guide](https://github.com/gab371/p2play-core/blob/main/docs/voice-chat-guide.md)**

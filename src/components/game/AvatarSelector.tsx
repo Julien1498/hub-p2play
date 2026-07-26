@@ -4,20 +4,32 @@ interface AvatarSelectorProps {
   selectedAvatar: string;
   onSelectAvatar: (avatar: string) => void;
   selectedGameKey?: string | null;
+  /** Home card is narrow → grid. Room panel is wide → single-line wrap. */
+  layout?: "grid" | "wrap";
 }
 
-const P2PLAY_AVATARS = ["👑", "🎮", "🤠", "🦊", "🐯", "🦉", "🦁", "🐍", "🚀", "💎", "🎲", "🏆"];
+const P2PLAY_AVATARS = ["👑", "🎮", "🤠", "🦊", "🐯", "🦉", "🦁", "🐍", "🎱", "🎯", "🚀", "💎", "🎲", "🏆"];
 
 const GAME_AVATARS: Record<string, string[]> = {
   skull: ["💀", "🌹", "🦊", "🐯", "🦉", "🐍"],
   royal: ["👑", "🏰", "🗡️", "⚜️", "🪙", "🛡️", "🦁", "🦅"],
-  sheriff: ["🤠", "👩‍🌾", "🧙‍♂️", "👨‍🍳", "👰‍♀️", "🤵‍♂️", "🌵", "🐎"]
+  sheriff: ["🤠", "👩‍🌾", "🧙‍♂️", "👨‍🍳", "👰‍♀️", "🤵‍♂️", "🌵", "🐎"],
+  pool: ["🎱", "🎯", "🔥", "👑", "🏆", "🤠"]
 };
 
-export function AvatarSelector({ selectedAvatar, onSelectAvatar, selectedGameKey }: AvatarSelectorProps) {
+export function AvatarSelector({
+  selectedAvatar,
+  onSelectAvatar,
+  selectedGameKey,
+  layout = "wrap",
+}: AvatarSelectorProps) {
   const [tab, setTab] = useState<'p2play' | 'game'>('p2play');
 
   const currentGameAvatars = selectedGameKey ? GAME_AVATARS[selectedGameKey] || [] : [];
+  const gridClass =
+    layout === "grid"
+      ? "grid grid-cols-7 gap-2 p-3 bg-zinc-950 border border-zinc-850 rounded-2xl justify-items-center"
+      : "flex flex-wrap gap-2 p-3 bg-zinc-950 border border-zinc-850 rounded-2xl";
 
   return (
     <div className="space-y-3 text-left">
@@ -53,7 +65,7 @@ export function AvatarSelector({ selectedAvatar, onSelectAvatar, selectedGameKey
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 p-3 bg-zinc-950 border border-zinc-850 rounded-2xl">
+      <div className={gridClass}>
         {(tab === 'p2play' ? P2PLAY_AVATARS : currentGameAvatars).map((avatar) => (
           <button
             key={avatar}
