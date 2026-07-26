@@ -1,3 +1,5 @@
+import type { CustomGameMeta } from '../utils/customGames';
+
 export type HubPhase = 'HUB_LOBBY' | 'GAME_CONFIG' | 'GAME_RUNNING';
 
 export interface HubState {
@@ -6,6 +8,8 @@ export interface HubState {
   gameConfig: any | null;
   phase: HubPhase;
   enableVoice?: boolean;
+  /** Host-owned catalog of live GitHub games synced to guests. */
+  customGames?: CustomGameMeta[];
 }
 
 export interface GameActionMessage {
