@@ -15,6 +15,22 @@ Allowlisted reverse proxy so the Hub on **GitHub Pages** can download release `d
 
 If those two secrets are missing, Live games stay off (unless you set optional fallback secret `VITE_GITHUB_PROXY_URL`).
 
+### Hide your name (no `prenom-nom.workers.dev`)
+
+The default URL looks like `https://p2play-github-proxy.<subdomain>.workers.dev` — `<subdomain>` is often your name.
+
+**Option A — Custom domain (recommended)**  
+1. Domain managed in the same Cloudflare account  
+2. Worker → **Settings** → **Domains & Routes** → **Add** → **Custom Domain**  
+   e.g. `gh-proxy.p2play.app`  
+   or uncomment `[[routes]]` / `custom_domain` in `wrangler.toml` and redeploy  
+3. GitHub Action secret `VITE_GITHUB_PROXY_URL` =  
+   `https://gh-proxy.p2play.app/api/github-proxy`  
+   (this secret **wins** over the auto `*.workers.dev` URL in CI)
+
+**Option B — Rename workers.dev subdomain**  
+Cloudflare dashboard → **Workers & Pages** → account subdomain setting (change to something neutral like `p2play`). Not always offered / may be one-shot.
+
 Optional Worker secret (rate limits): configure `GITHUB_TOKEN` in the Cloudflare dashboard on the worker, or:
 
 ```bash

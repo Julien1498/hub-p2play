@@ -103,10 +103,13 @@ jobs:
         id: live_proxy
         env:
           CF_DEPLOY_URL: ${{ steps.cf_proxy.outputs.deployment-url }}
+          # Prefer this secret when set (custom domain without your workers.dev name).
           MANUAL_PROXY_URL: ${{ secrets.VITE_GITHUB_PROXY_URL }}
         run: |
           url=""
-          if [ -n "$CF_DEPLOY_URL" ]; then
+          if [ -n "$MANUAL_PROXY_URL" ]; then
+            url="${MANUAL_PROXY_URL%/}"
+          elif [ -n "$CF_DEPLOY_URL" ]; then
             # Normalize: strip junk after space, ensure https://
             host=$(echo "$CF_DEPLOY_URL" | awk '{print $1}')
             case "$host" in
@@ -115,8 +118,6 @@ jobs:
               *) url="https://$host" ;;
             esac
             url="${url%/}/api/github-proxy"
-          elif [ -n "$MANUAL_PROXY_URL" ]; then
-            url="$MANUAL_PROXY_URL"
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
           if [ -n "$url" ]; then
