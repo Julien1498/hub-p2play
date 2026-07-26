@@ -1,13 +1,15 @@
 # 🎮 P2Play Hub - Multiplayer Game Orchestrator
 
-**P2Play Hub** est un orchestrateur de jeux de société multijoueurs Peer-to-Peer (P2P) sans serveur. Il permet à des joueurs de créer un salon persistant ("Party Group"), d'inviter des amis via un code de salon, et de basculer de manière transparente d'un jeu à un autre (Skull & Roses, Royal Bluff, Sheriff & Smugglers) sans rechargement de page ni perte de connexion WebRTC.
+**P2Play Hub** est un orchestrateur de jeux de société multijoueurs Peer-to-Peer (P2P) sans serveur. Il permet à des joueurs de créer un salon persistant ("Party Group"), d'inviter des amis via un code de salon, et de basculer de manière transparente d'un jeu à un autre (*Skull & Roses*, *Royal Bluff*, *Sheriff & Smugglers*, *Billard P2Play*) sans rechargement de page ni perte de connexion WebRTC.
+
+Toute la couche réseau WebRTC, le chat vocal et la gestion des salons reposent sur la bibliothèque unifiée **[`p2play-core`](https://github.com/gab371/p2play-core)**.
 
 ---
 
 ## ✨ Fonctionnalités Principales
 
 - **Orchestration Single Page Application (SPA)** : Tout le cycle de vie (Hub <-> Jeux) se déroule sur une seule page HTML/React. Aucune iFrame n'est utilisée.
-- **Groupe de Partie Persistant (Party Group P2P)** : La connexion WebRTC (via PeerJS) est établie au niveau du Hub et transmise de manière transparente au jeu sélectionné lors du lancement.
+- **Groupe de Partie Persistant (Party Group P2P)** : La connexion WebRTC (via PeerJS et `p2play-core`) est établie au niveau du Hub et transmise de manière transparente au jeu sélectionné lors du lancement (`externalPeerManager`).
 - **Rendu Plein Écran & Navigation** : Les jeux s'affichent en superposition intégrale (`100vw` × `100vh`) avec une barre supérieure de navigation contenant un bouton **`← Lobby P2Play`** pour revenir au salon à tout moment.
 - **Bypass Direct des Lobbies de Jeux** : Les joueurs saisissent leur pseudo et leur émote une seule fois dans le Hub. Le lancement bascule directement sur le plateau de jeu (`GameBoard`).
 - **Sélecteur d'Émotes Double Pack** : Prise en charge des **"Émotes P2Play"** (universelles Hub) et des **"Émotes du Jeu"** (thématiques).
@@ -17,8 +19,8 @@
 
 ## 🛠️ Stack Technique
 
-- **Framework UI** : React 18, TypeScript, Tailwind CSS, Lucide React.
-- **Réseau P2P** : PeerJS (WebRTC data channels sans serveur de jeu centralisé).
+- **Moteur Réseau Unifié** : [`p2play-core`](https://github.com/gab371/p2play-core) (PeerJS WebRTC transport, passation de session, chat vocal & mode spectateur).
+- **Framework UI** : React 18 / 19, TypeScript, Tailwind CSS, Lucide React.
 - **Build Tool** : Vite (Support ES Modules & injection dynamique de bundles).
 - **Automation** : Node.js (`download-games.js`) pour le téléchargement dynamique des releases GitHub.
 
@@ -49,9 +51,10 @@ Ouvrez votre navigateur sur `http://localhost:3004`.
 
 Consultez les guides détaillés pour comprendre le fonctionnement interne et ajouter de nouveaux jeux :
 
+- 🌐 **[Documentation `p2play-core`](https://github.com/gab371/p2play-core)** : Référence complète du moteur réseau P2P, du chat vocal et du mode spectateur.
 - 🏛️ **[Architecture globale du Hub](docs/architecture.md)** : Fonctionnement du Party Group P2P, passation WebRTC et gestion SPA.
 - 🔌 **[Contrat de Montage (`window.mountXxx`)](docs/game-mount-contract.md)** : Spécifications techniques requises pour les bundles ES Modules des jeux.
-- 🛠️ **[Guide Développeur : Ajouter un nouveau jeu](docs/developer-guide-new-game.md)** : Tutoriel pas-à-pas pour adapter un jeu, configurer Vite et publier une Release GitHub compatible.
+- 🛠️ **[Guide Développeur : Ajouter un nouveau jeu](docs/developer-guide-new-game.md)** : Tutoriel pas-à-pas pour adapter un jeu avec `p2play-core`, configurer Vite et publier une Release GitHub compatible.
 
 ---
 

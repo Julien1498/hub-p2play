@@ -1,6 +1,6 @@
 # 🔌 Spécification du Contrat de Montage (`window.mountXxx`)
 
-Chaque jeu intégré au Hub P2Play doit obligatoirement respecter la spécification du contrat de montage afin de pouvoir être chargé, exécuté et démonté proprement.
+Chaque jeu intégré au Hub P2Play doit obligatoirement respecter la spécification du contrat de montage afin de pouvoir être chargé, exécuté et démonté proprement. Les types et la gestion du réseau reposent sur le package unifié **[`p2play-core`](https://github.com/gab371/p2play-core)**.
 
 ---
 
@@ -12,12 +12,15 @@ La fonction de montage doit être exposée sur l'objet global `window` de la man
   - Clef `skull` -> `window.mountSkull`
   - Clef `royal` -> `window.mountRoyal`
   - Clef `sheriff` -> `window.mountSheriff`
+  - Clef `pool` -> `window.mountPool`
 
 ---
 
 ## 2. Signature de la Fonction `mount`
 
 ```typescript
+import type { PeerManagerLike } from 'p2play-core';
+
 export type MountFunction = (
   container: HTMLElement, 
   options: MountOptions
@@ -35,8 +38,8 @@ export interface MountOptions {
   /** Émote/Avatar choisi dans le Hub (ex: "👑", "🦊", "🤠") */
   playerAvatar?: string;
   
-  /** Instance du gestionnaire WebRTC/PeerJS déjà connecté */
-  externalPeerManager?: any;
+  /** Instance du gestionnaire WebRTC/PeerJS p2play-core déjà connecté */
+  externalPeerManager?: PeerManagerLike;
   
   /** Drapeau indiquant que le jeu est exécuté au sein du Hub */
   isEmbedded?: boolean;
@@ -51,10 +54,11 @@ export interface MountOptions {
 ## 3. Exemple d'Implémentation dans `src/main.tsx`
 
 ```tsx
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import App from './App.tsx'
-import './index.css'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App.tsx';
+import type { MountOptions } from 'p2play-core';
+import './index.css';
 
 export function mount(element: HTMLElement, options: MountOptions) {
   // Injection automatique du style CSS du jeu si absent du document
@@ -130,3 +134,5 @@ export default defineConfig(({ mode }) => {
 
 - **Portée des Sélecteurs** : Encapsulez les thèmes CSS spécifiques dans des classes de conteneurs uniques (ex: `.theme-skull`) pour éviter que des règles génériques n'altèrent les composants du Hub.
 - **Chemins d'Assets** : Tous les médias (images, sons, SVG) doivent être importés via des modules Vite ou référencés via des chemins relatifs (`./assets/`) pour fonctionner correctement lorsqu'ils sont servis sous `public/games/${gameKey}/`.
+
+Pour plus d'informations sur l'implémentation P2P, référez-vous à la **[Documentation de `p2play-core`](https://github.com/gab371/p2play-core)**.

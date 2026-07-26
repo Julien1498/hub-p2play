@@ -1,10 +1,10 @@
 # 🏛️ Architecture du Hub P2Play
 
-Ce document décrit les principes architecturaux du Hub P2Play, le protocole réseau WebRTC/PeerJS persistant, et le cycle de vie de la passation de session.
+Ce document décrit les principes architecturaux du Hub P2Play, le protocole réseau WebRTC/PeerJS persistant via [`p2play-core`](https://github.com/gab371/p2play-core), et le cycle de vie de la passation de session.
 
 ---
 
-## 1. Philosophie Architecturales
+## 1. Philosophie Architecturale
 
 ### 🚫 Pourquoi "Pas d'iFrame" ?
 Dans les architectures classiques d'orchestration web, les jeux sont souvent embarqués via des iFrames. Nous avons rejeté cette approche pour les raisons suivantes :
@@ -17,7 +17,7 @@ Le Hub P2Play fonctionne comme une **Single Page Application (SPA)** unique :
 1. Les sous-jeux sont compilés sous forme d'**ES Modules isolés** (`index.js` + `style.css`).
 2. Lors de la sélection d'un jeu, le Hub injecte dynamiquement une balise `<script type="module" src="/games/${gameKey}/index.js">` et sa feuille de style.
 3. Le script expose une fonction globale `window.mountXxx(container, options)` sur l'objet window.
-4. Le Hub appelle cette fonction de montage en lui passant le nœud DOM conteneur et l'instance réseau WebRTC déjà active.
+4. Le Hub appelle cette fonction de montage en lui passant le nœud DOM conteneur et l'instance réseau WebRTC déjà active (`externalPeerManager`).
 
 ---
 
@@ -29,13 +29,14 @@ sequenceDiagram
     actor Hôte
     actor Client
     participant Hub as Hub P2Play (SPA)
+    participant Core as p2play-core (WebRTC)
     participant Game as Module Jeu (index.js)
 
     Note over Hôte, Client: Phase 1 : Création du Salon P2Play
     Hôte->>Hub: Saisit Pseudo/Émote & Clic "Créer un salon"
-    Hub-->>Hub: Initialise HubPeerManager (PeerJS) avec Code Salon
+    Hub-->>Core: Initialise PeerManager (PeerJS) avec Code Salon
     Client->>Hub: Saisit Code Salon & Clic "Rejoindre"
-    Client->>Hub: Établit connexion PeerJS directe avec l'Hôte
+    Client->>Core: Établit connexion PeerJS directe avec l'Hôte
 
     Note over Hôte, Client: Phase 2 : Sélection et Lancement
     Hôte->>Hub: Choisit "Royal Bluff" et clic "Lancer la partie"
@@ -44,8 +45,8 @@ sequenceDiagram
 
     Note over Hôte, Client: Phase 3 : Passation WebRTC & Auto-Start
     Hub->>Game: Appelle mountRoyal(node, { externalPeerManager, playerInfo })
-    Note over Game: Synchronisation directe des identifiants
-    Game->>Game: L'hôte démarre le moteur de jeu (engine.startGame())
+    Note over Game: usePeer(externalPeerManager) s'abonne aux événements p2play-core
+    Game->>Game: L'hôte démarrer le moteur de jeu (engine.startGame())
     Game-->>Hôte: Affiche <GameBoard /> directement (Bypass du Lobby)
     Game-->>Clients: Affiche <GameBoard /> directement (Bypass du Lobby)
 
@@ -57,14 +58,18 @@ sequenceDiagram
 
 ---
 
-## 3. Gestion Réseau & Abstract PeerManager
+## 3. Gestion Réseau & `PeerManagerLike` (`p2play-core`)
 
-Le Hub instancie une classe `HubPeerManager` qui maintient la carte des connexions actives (`Map<string, DataConnection>`).
+Toute l'abstraction réseau repose sur le type `PeerManagerLike` et la classe `PeerManager` du package **`p2play-core`**.
+
+Le Hub instancie un `HubPeerManager` (qui conforme à `PeerManagerLike`) pour maintenir la carte des connexions actives (`Map<string, DataConnection>`).
 
 Lorsqu'un sous-jeu est monté :
-- L'instance `globalHubPeer` est transmise via l'option `externalPeerManager`.
-- Le hook `usePeer` du sous-jeu réutilise cette instance au lieu de créer une nouvelle instance PeerJS.
-- Le sous-jeu enregistre son propre gestionnaire d'actions (`hostActionHandler`) et ses callbacks de réception d'état (`onStateReceived`).
+- L'instance réseau active du Hub est transmise via l'option `externalPeerManager`.
+- Le hook `usePeer` de `p2play-core` réutilise directement cette instance sans réinstancier de connexion PeerJS.
+- Le sous-jeu enregistre ses callbacks d'action et d'état (`onStateReceived`, `hostActionHandler`, `onCustomMessage`).
+
+Pour plus de détails sur l'API réseau, les messages pris en charge, le chat vocal et le mode spectateur, consultez la **[Documentation officielle de `p2play-core`](https://github.com/gab371/p2play-core)**.
 
 ---
 
