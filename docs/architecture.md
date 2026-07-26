@@ -1,81 +1,81 @@
-# 🏛️ Architecture du Hub P2Play
+# 🏛️ P2Play Hub Architecture
 
-Ce document décrit les principes architecturaux du Hub P2Play, le protocole réseau WebRTC/PeerJS persistant via [`p2play-core`](https://github.com/gab371/p2play-core), et le cycle de vie de la passation de session.
-
----
-
-## 1. Philosophie Architecturale
-
-### 🚫 Pourquoi "Pas d'iFrame" ?
-Dans les architectures classiques d'orchestration web, les jeux sont souvent embarqués via des iFrames. Nous avons rejeté cette approche pour les raisons suivantes :
-- **Intégration visuelle lourde** : Gestion complexe du scroll, des fenêtres modales et des styles CSS.
-- **Rupture Réseau** : Nécessite une couche complexe de proxy `postMessage` pour faire transiter les paquets WebRTC entre le Hub parent et l'iFrame enfant.
-- **Performances** : Chaque iFrame instancie un contexte DOM et JS séparé, alourdissant l'empreinte mémoire.
-
-### ✨ L'Approche ES Module & Dynamic Script Injection
-Le Hub P2Play fonctionne comme une **Single Page Application (SPA)** unique :
-1. Les sous-jeux sont compilés sous forme d'**ES Modules isolés** (`index.js` + `style.css`).
-2. Lors de la sélection d'un jeu, le Hub injecte dynamiquement une balise `<script type="module" src="/games/${gameKey}/index.js">` et sa feuille de style.
-3. Le script expose une fonction globale `window.mountXxx(container, options)` sur l'objet window.
-4. Le Hub appelle cette fonction de montage en lui passant le nœud DOM conteneur et l'instance réseau WebRTC déjà active (`externalPeerManager`).
+This document describes the architectural principles of P2Play Hub, the persistent WebRTC/PeerJS network protocol powered by [`p2play-core`](https://github.com/gab371/p2play-core), and session handover lifecycle.
 
 ---
 
-## 2. Cycle de Vie du Salon Persistant ("Party Group")
+## 1. Architectural Philosophy
+
+### 🚫 Why "No iFrames"?
+In classic web orchestration architectures, games are often embedded inside iFrames. We rejected this approach for several key reasons:
+- **Heavy Visual Integration**: Complex scrolling management, modal popups, and CSS styling isolation issues.
+- **Network Disruption**: Requires a complex `postMessage` proxy layer to pass WebRTC packets between parent Hub and child iFrame.
+- **Performance**: Each iFrame instantiates separate DOM and JS contexts, increasing memory footprint.
+
+### ✨ The ES Module & Dynamic Script Injection Approach
+P2Play Hub operates as a single **Single Page Application (SPA)**:
+1. Sub-games are compiled as **isolated ES Modules** (`index.js` + `style.css`).
+2. When selecting a game, Hub dynamically injects a `<script type="module" src="/games/${gameKey}/index.js">` tag and its stylesheet.
+3. The script exposes a global `window.mountXxx(container, options)` function on the window object.
+4. Hub calls this mount function, passing the target DOM container node and active WebRTC network instance (`externalPeerManager`).
+
+---
+
+## 2. Persistent Party Group Lifecycle
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Hôte
+    actor Host
     actor Client
-    participant Hub as Hub P2Play (SPA)
+    participant Hub as P2Play Hub (SPA)
     participant Core as p2play-core (WebRTC)
-    participant Game as Module Jeu (index.js)
+    participant Game as Game Module (index.js)
 
-    Note over Hôte, Client: Phase 1 : Création du Salon P2Play
-    Hôte->>Hub: Saisit Pseudo/Émote & Clic "Créer un salon"
-    Hub-->>Core: Initialise PeerManager (PeerJS) avec Code Salon
-    Client->>Hub: Saisit Code Salon & Clic "Rejoindre"
-    Client->>Core: Établit connexion PeerJS directe avec l'Hôte
+    Note over Host, Client: Phase 1: Party Room Creation
+    Host->>Hub: Enters Username/Avatar & Clicks "Create Room"
+    Hub-->>Core: Initializes PeerManager (PeerJS) with Room Code
+    Client->>Hub: Enters Room Code & Clicks "Join"
+    Client->>Core: Establishes direct PeerJS connection with Host
 
-    Note over Hôte, Client: Phase 2 : Sélection et Lancement
-    Hôte->>Hub: Choisit "Royal Bluff" et clic "Lancer la partie"
-    Hub (Hôte)-->>Hub (Clients): Diffuse message P2P "START_GAME: royal"
-    Hub->>Hub: Affiche GameMountPanel en Plein Écran (100vw × 100vh)
+    Note over Host, Client: Phase 2: Selection & Launch
+    Host->>Hub: Selects "Royal Bluff" and clicks "Launch Game"
+    Hub (Host)-->>Hub (Clients): Broadcasts P2P message "START_GAME: royal"
+    Hub->>Hub: Displays Full-Screen GameMountPanel (100vw × 100vh)
 
-    Note over Hôte, Client: Phase 3 : Passation WebRTC & Auto-Start
-    Hub->>Game: Appelle mountRoyal(node, { externalPeerManager, playerInfo })
-    Note over Game: usePeer(externalPeerManager) s'abonne aux événements p2play-core
-    Game->>Game: L'hôte démarrer le moteur de jeu (engine.startGame())
-    Game-->>Hôte: Affiche <GameBoard /> directement (Bypass du Lobby)
-    Game-->>Clients: Affiche <GameBoard /> directement (Bypass du Lobby)
+    Note over Host, Client: Phase 3: WebRTC Handover & Game Mount
+    Hub->>Game: Calls mountRoyal(node, { externalPeerManager, playerInfo })
+    Note over Game: usePeer(externalPeerManager) subscribes to p2play-core events
+    Game->>Game: Host starts game engine (engine.startGame())
+    Game-->>Host: Renders <GameBoard /> directly (Bypasses Home Screen)
+    Game-->>Clients: Renders <GameBoard /> directly (Bypasses Home Screen)
 
-    Note over Hôte, Client: Phase 4 : Retour au Hub
-    Hôte->>Hub: Clic sur le bouton "← Lobby P2Play"
-    Hub->>Game: Appelle la fonction d'unmount() et nettoie le DOM
-    Hub-->>Hôte: Restaure la vue salon du Hub sans déconnexion P2P
+    Note over Host, Client: Phase 4: Return to Hub
+    Host->>Hub: Clicks "← P2Play Lobby" button
+    Hub->>Game: Calls unmount() callback and cleans up DOM
+    Hub-->>Host: Restores Hub party room view with zero P2P disconnection
 ```
 
 ---
 
-## 3. Gestion Réseau & `PeerManagerLike` (`p2play-core`)
+## 3. Network Management & `PeerManagerLike` (`p2play-core`)
 
-Toute l'abstraction réseau repose sur le type `PeerManagerLike` et la classe `PeerManager` du package **`p2play-core`**.
+All network abstraction relies on `PeerManagerLike` interface and `PeerManager` class from **`p2play-core`**.
 
-Le Hub instancie un `HubPeerManager` (qui conforme à `PeerManagerLike`) pour maintenir la carte des connexions actives (`Map<string, DataConnection>`).
+Hub instantiates a `HubPeerManager` (conforming to `PeerManagerLike`) to maintain active connections (`Map<string, DataConnection>`).
 
-Lorsqu'un sous-jeu est monté :
-- L'instance réseau active du Hub est transmise via l'option `externalPeerManager`.
-- Le hook `usePeer` de `p2play-core` réutilise directement cette instance sans réinstancier de connexion PeerJS.
-- Le sous-jeu enregistre ses callbacks d'action et d'état (`onStateReceived`, `hostActionHandler`, `onCustomMessage`).
+When a sub-game is mounted:
+- Hub's active network instance is passed via `externalPeerManager` option.
+- Sub-game's `usePeer` hook from `p2play-core` reuses this instance without re-instantiating PeerJS.
+- Sub-game registers action handlers (`hostActionHandler`) and state callbacks (`onStateReceived`).
 
-Pour plus de détails sur l'API réseau, les messages pris en charge, le chat vocal et le mode spectateur, consultez la **[Documentation officielle de `p2play-core`](https://github.com/gab371/p2play-core)**.
+For full details on network API, voice chat, and spectator features, read the **[`p2play-core` Documentation](https://github.com/gab371/p2play-core)**.
 
 ---
 
 ## 4. Browser Polyfills (`window.process`)
 
-Pour garantir la compatibilité des bundles compilés (React/React-DOM dépendent en interne de la variable globale Node.js `process.env.NODE_ENV`), le fichier `index.html` du Hub injecte un polyfill racine :
+To ensure compatibility of compiled bundles (React/React-DOM depend internally on Node.js global `process.env.NODE_ENV`), Hub's `index.html` injects a root polyfill:
 
 ```html
 <script>
@@ -83,4 +83,4 @@ Pour garantir la compatibilité des bundles compilés (React/React-DOM dépenden
 </script>
 ```
 
-Ce script garantit qu'aucune erreur `Uncaught ReferenceError: process is not defined` ne survienne lors de l'exécution des modules ES dans n'importe quel navigateur.
+This script ensures no `Uncaught ReferenceError: process is not defined` errors occur during ES module execution in any browser.

@@ -1,22 +1,22 @@
-# 🔌 Spécification du Contrat de Montage (`window.mountXxx`)
+# 🔌 Mount Contract Specification (`window.mountXxx`)
 
-Chaque jeu intégré au Hub P2Play doit obligatoirement respecter la spécification du contrat de montage afin de pouvoir être chargé, exécuté et démonté proprement. Les types et la gestion du réseau reposent sur le package unifié **[`p2play-core`](https://github.com/gab371/p2play-core)**.
-
----
-
-## 1. Nommage de la Fonction de Montage
-
-La fonction de montage doit être exposée sur l'objet global `window` de la manière suivante :
-- Format du nom : `mount${CapitalizedGameKey}`
-- Exemples :
-  - Clef `skull` -> `window.mountSkull`
-  - Clef `royal` -> `window.mountRoyal`
-  - Clef `sheriff` -> `window.mountSheriff`
-  - Clef `pool` -> `window.mountPool`
+Every game integrated into P2Play Hub must comply with the mount contract specification to ensure clean loading, execution, and unmounting. Network types and management rely on **[`p2play-core`](https://github.com/gab371/p2play-core)**.
 
 ---
 
-## 2. Signature de la Fonction `mount`
+## 1. Mount Function Naming
+
+The mount function must be exposed on the global `window` object using the following naming convention:
+- Format: `mount${CapitalizedGameKey}`
+- Examples:
+  - Key `skull` -> `window.mountSkull`
+  - Key `royal` -> `window.mountRoyal`
+  - Key `sheriff` -> `window.mountSheriff`
+  - Key `pool` -> `window.mountPool`
+
+---
+
+## 2. `mount` Function Signature
 
 ```typescript
 import type { PeerManagerLike } from 'p2play-core';
@@ -29,29 +29,29 @@ export type MountFunction = (
 export type UnmountFunction = () => void;
 
 export interface MountOptions {
-  /** Identifiant PeerJS du joueur local */
+  /** Local player PeerJS ID */
   peerId: string;
   
-  /** Nom du joueur saisi dans le Hub */
+  /** Player username entered in Hub */
   playerName?: string;
   
-  /** Émote/Avatar choisi dans le Hub (ex: "👑", "🦊", "🤠") */
+  /** Player avatar/emote selected in Hub (e.g. "👑", "🦊", "🤠") */
   playerAvatar?: string;
   
-  /** Instance du gestionnaire WebRTC/PeerJS p2play-core déjà connecté */
+  /** Active WebRTC p2play-core peer manager instance */
   externalPeerManager?: PeerManagerLike;
   
-  /** Drapeau indiquant que le jeu est exécuté au sein du Hub */
+  /** Flag indicating game is running embedded inside Hub */
   isEmbedded?: boolean;
   
-  /** Callback permettant de déclencher le retour au salon du Hub */
+  /** Callback triggering return to Hub lobby */
   onExit?: () => void;
 }
 ```
 
 ---
 
-## 3. Exemple d'Implémentation dans `src/main.tsx`
+## 3. Example Implementation in `src/main.tsx`
 
 ```tsx
 import { StrictMode } from 'react';
@@ -61,7 +61,7 @@ import type { MountOptions } from 'p2play-core';
 import './index.css';
 
 export function mount(element: HTMLElement, options: MountOptions) {
-  // Injection automatique du style CSS du jeu si absent du document
+  // Inject game CSS stylesheet dynamically if absent
   const styleId = 'game-style-skull';
   if (!document.getElementById(styleId)) {
     const link = document.createElement('link');
@@ -84,30 +84,30 @@ export function mount(element: HTMLElement, options: MountOptions) {
     </StrictMode>
   );
 
-  // La fonction retourne un callback pour unmount proprement le nœud DOM
+  // Return callback to unmount DOM node cleanly
   return () => {
     root.unmount();
   };
 }
 
-// Exposition sur window
+// Expose on global window object
 (window as any).mountSkull = mount;
 ```
 
 ---
 
-## 4. Spécifications du Build Vite (`vite.config.ts`)
+## 4. Vite Build Specifications (`vite.config.ts`)
 
-Le build de bibliothèque (`npx vite build --mode lib`) doit générer un fichier d'entrée unique nommé `index.js` et une feuille de style nommée `<game-key>.css`.
+Library build (`npx vite build --mode lib`) must output a single entry file named `index.js` and a stylesheet named `<game-key>.css`.
 
 ```typescript
-// Extrait de vite.config.ts
+// Excerpt from vite.config.ts
 export default defineConfig(({ mode }) => {
   const isLib = mode === 'lib';
   return {
     base: './',
     plugins: [react()],
-    // Remplacement explicite au niveau racine de la config Vite
+    // Root define prevents process.env runtime errors
     define: {
       'process.env.NODE_ENV': JSON.stringify('production'),
       'process.env': '{}',
@@ -120,7 +120,7 @@ export default defineConfig(({ mode }) => {
         formats: ['es'],
         fileName: () => 'index.js'
       }
-      // Ne pas externaliser react/react-dom pour garantir un ES module autonome
+      // Do not externalize react/react-dom to ensure standalone ES module compatibility
     } : {
       outDir: 'dist'
     }
@@ -130,9 +130,9 @@ export default defineConfig(({ mode }) => {
 
 ---
 
-## 5. Recommandations CSS & Isolement de Styles
+## 5. CSS Recommendations & Selector Scoping
 
-- **Portée des Sélecteurs** : Encapsulez les thèmes CSS spécifiques dans des classes de conteneurs uniques (ex: `.theme-skull`) pour éviter que des règles génériques n'altèrent les composants du Hub.
-- **Chemins d'Assets** : Tous les médias (images, sons, SVG) doivent être importés via des modules Vite ou référencés via des chemins relatifs (`./assets/`) pour fonctionner correctement lorsqu'ils sont servis sous `public/games/${gameKey}/`.
+- **Selector Scoping**: Wrap game-specific CSS themes inside unique container classes (e.g. `.theme-skull`) to prevent style leaks into Hub UI.
+- **Asset Paths**: All media assets (images, audio, SVGs) should be imported via Vite modules or referenced using relative paths (`./assets/`) to work correctly when served under `public/games/${gameKey}/`.
 
-Pour plus d'informations sur l'implémentation P2P, référez-vous à la **[Documentation de `p2play-core`](https://github.com/gab371/p2play-core)**.
+For detailed P2P networking guidelines, read **[`p2play-core` Documentation](https://github.com/gab371/p2play-core)**.

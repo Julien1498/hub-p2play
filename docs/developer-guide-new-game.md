@@ -1,26 +1,26 @@
-# 🛠️ Guide Développeur : Ajouter un Nouveau Jeu au Hub P2Play
+# 🛠️ Developer Guide: Add a New Game to P2Play Hub
 
-Ce guide pas-à-pas explique comment adapter un jeu React/TypeScript existant ou en créer un nouveau pour le rendre compatible avec l'orchestrateur **P2Play Hub** en utilisant la bibliothèque unifiée **[`p2play-core`](https://github.com/gab371/p2play-core)**.
-
----
-
-## 📋 Checklist d'Intégration
-
-- [ ] **Étape 1** : Installer `p2play-core` dans votre jeu (`npm i github:gab371/p2play-core#v0.2.0`).
-- [ ] **Étape 2** : Configurer la compilation double mode (`standalone` & `lib`) dans `vite.config.ts`.
-- [ ] **Étape 3** : Exposer la fonction `window.mountXxx` dans `src/main.tsx`.
-- [ ] **Étape 4** : Utiliser `usePeer` de `p2play-core` pour gérer de façon unifiée le P2P (mode standalone et mode `externalPeerManager`).
-- [ ] **Étape 5** : Adapter `useGame.ts` / `App.tsx` pour auto-démarrer la partie et bypass le composant `<Lobby />` local lorsque `isEmbedded` est actif.
-- [ ] **Étape 6** : Configurer la pipeline CI/CD GitHub Actions (`deploy.yml`) pour générer `dist.zip` et `standalone.zip`.
-- [ ] **Étape 7** : Déclarer le jeu et sa version dans `games.json` du Hub.
+This step-by-step guide explains how to adapt an existing React/TypeScript game or create a new one compatible with **P2Play Hub** using the unified **[`p2play-core`](https://github.com/gab371/p2play-core)** package.
 
 ---
 
-## 🛠️ Étapier Détaillé
+## 📋 Integration Checklist
 
-### Étape 1 : Installation de `p2play-core`
+- [ ] **Step 1**: Install `p2play-core` in your game (`npm i github:gab371/p2play-core#v0.2.0`).
+- [ ] **Step 2**: Configure dual build modes (`standalone` & `lib`) in `vite.config.ts`.
+- [ ] **Step 3**: Expose `window.mountXxx` in `src/main.tsx`.
+- [ ] **Step 4**: Use `usePeer` from `p2play-core` to manage P2P connections (standalone and `externalPeerManager`).
+- [ ] **Step 5**: Adapt `useGame.ts` / `App.tsx` to auto-populate players and bypass local home screen when `isEmbedded` is active.
+- [ ] **Step 6**: Configure CI/CD GitHub Actions workflow (`deploy.yml`) to build `dist.zip` and `standalone.zip`.
+- [ ] **Step 7**: Register game entry and version in Hub's `games.json`.
 
-Ajoutez `p2play-core` dans le `package.json` de votre jeu :
+---
+
+## 🛠️ Step-by-Step Instructions
+
+### Step 1: Install `p2play-core`
+
+Add `p2play-core` to your game's `package.json`:
 
 ```bash
 npm install github:gab371/p2play-core#v0.2.0
@@ -28,9 +28,9 @@ npm install github:gab371/p2play-core#v0.2.0
 
 ---
 
-### Étape 2 : Modification de `vite.config.ts`
+### Step 2: Configure `vite.config.ts`
 
-Assurez-vous que Vite prend en charge le flag `--mode lib` et que `define` est déclaré au premier niveau :
+Ensure Vite handles `--mode lib` flag and root-level `define`:
 
 ```typescript
 import path from "path"
@@ -72,7 +72,7 @@ export default defineConfig(({ mode }) => {
 
 ---
 
-### Étape 3 : Exposition de `mountMygame` dans `src/main.tsx`
+### Step 3: Expose `mountMygame` in `src/main.tsx`
 
 ```tsx
 import { StrictMode } from 'react'
@@ -117,9 +117,9 @@ export function mount(element: HTMLElement, options: {
 
 ---
 
-### Étape 4 : Utilisation de `p2play-core` (`usePeer`)
+### Step 4: Use `p2play-core` (`usePeer`)
 
-Dans votre hook `usePeer` local ou directement dans vos composants, utilisez le hook `usePeer` de `p2play-core` :
+Use `p2play-core`'s `usePeer` hook in your components or local hook wrapper:
 
 ```typescript
 import { usePeer as useCorePeer, type PeerManagerLike } from 'p2play-core';
@@ -132,7 +132,7 @@ interface UsePeerOptions {
 export function usePeer(options?: UsePeerOptions) {
   return useCorePeer<GameState>({
     externalPeerManager: options?.externalPeerManager,
-    namespacePrefix: 'mygame', // Utilisé en mode standalone
+    namespacePrefix: 'mygame', // Used in standalone mode
     sounds: {
       click: () => soundManager.playClick(),
       victory: () => soundManager.playVictory(),
@@ -141,13 +141,13 @@ export function usePeer(options?: UsePeerOptions) {
 }
 ```
 
-En passant `externalPeerManager`, `p2play-core` réutilise automatiquement la connexion WebRTC du Hub sans créer de nouvelle instance PeerJS.
+Passing `externalPeerManager` reuses Hub's WebRTC connection without instantiating a duplicate PeerJS instance.
 
 ---
 
-### Étape 5 : Auto-Start & Bypass du Lobby Local dans `useGame.ts`
+### Step 5: Direct Bypass & Embedded Pre-Game Configuration (`useGame.ts`)
 
-Dans `src/hooks/useGame.ts`, ajoutez la vérification `options.isEmbedded` pour démarrer le moteur de jeu automatiquement avec la liste des joueurs du Hub (`peerManager.lobbyPlayers`) :
+In `src/hooks/useGame.ts`, add embedded checks to populate players automatically from `peerManager.lobbyPlayers` while staying in `LOBBY` phase if your game features pre-game deck/rule configuration:
 
 ```typescript
   useEffect(() => {
@@ -159,22 +159,23 @@ Dans `src/hooks/useGame.ts`, ajoutez la vérification `options.isEmbedded` pour 
 
     const engine = gameEngineRef.current;
 
-    // Lancement automatique sans repasser par le formulaire du sous-jeu
+    // Populate players from Hub lobby without skipping pre-game config screen
     if (options?.isEmbedded && options?.externalPeerManager && engine.state.phase === 'LOBBY') {
       engine.state.players = [];
-      const hostName = options.playerName || "Hôte";
+      const hostName = options.playerName || "Host";
       const hostAvatar = options.playerAvatar || "👑";
       engine.addPlayer(myPeerId!, hostName, hostAvatar, true);
 
       if (peerManager.lobbyPlayers) {
         peerManager.lobbyPlayers.forEach((p: any) => {
           if (p.peerId && p.peerId !== myPeerId) {
-            engine.addPlayer(p.peerId, p.username || `Joueur ${p.peerId.slice(0, 4)}`, p.avatar || "👤", false);
+            engine.addPlayer(p.peerId, p.username || `Player ${p.peerId.slice(0, 4)}`, p.avatar || "👤", false);
           }
         });
       }
 
-      engine.startGame();
+      // DO NOT call engine.startGame() here if game exposes pre-game configuration.
+      // Host triggers start via "Launch Game" button in pre-game lobby.
       broadcastSanitizedStates(engine.state);
     }
   }, [options?.isEmbedded, isHost]);
@@ -182,9 +183,9 @@ Dans `src/hooks/useGame.ts`, ajoutez la vérification `options.isEmbedded` pour 
 
 ---
 
-### Étape 6 : Pipeline CI/CD GitHub Actions (`.github/workflows/deploy.yml`)
+### Step 6: CI/CD Pipeline (`.github/workflows/deploy.yml`)
 
-Ajoutez les étapes de double compilation et de publication dans les Releases GitHub de votre dépôt de jeu :
+Configure GitHub Actions workflow to build dual archives and create GitHub Releases:
 
 ```yaml
 name: Deploy and Release Game
@@ -203,15 +204,15 @@ jobs:
           node-version: 20
       - run: npm ci
       
-      # 1. Build Standalone (Pour GitHub Pages)
+      # 1. Standalone Build (For GitHub Pages)
       - run: npm run build
       - run: cd dist && zip -r ../standalone.zip .
       
-      # 2. Build Library (Pour l'intégration Hub)
+      # 2. Library Build (For Hub integration)
       - run: npx vite build --mode lib
       - run: cd dist && zip -r ../dist.zip .
 
-      # 3. Publication automatique de la Release GitHub
+      # 3. Create GitHub Release
       - name: Extract version
         id: get_version
         run: echo "VERSION=v$(node -p "require('./package.json').version")" >> $GITHUB_ENV
@@ -230,27 +231,27 @@ jobs:
 
 ---
 
-### Étape 7 : Enregistrement dans `games.json` du Hub
+### Step 7: Register in Hub `games.json`
 
-Dans le dépôt `hub-p2play`, ajoutez l'entrée de votre jeu dans `games.json` :
+In `hub-p2play`, add your game entry to `games.json`:
 
 ```json
 {
   "games": {
     "mygame": {
-      "repo": "votre-orga/votre-depot-jeu",
+      "repo": "your-org/your-game-repo",
       "version": "v1.0.0"
     }
   }
 }
 ```
 
-Enfin, relancez `node download-games.js` dans le Hub pour télécharger, extraire et rendre votre jeu immédiatement jouable !
+Run `node download-games.js` in Hub to download, extract, and play your game instantly!
 
 ---
 
-## 🎙️ Et pour le Chat Vocal et le Mode Spectateur ?
+## 🎙️ Voice Chat & Spectator Mode
 
-`p2play-core` fournit out-of-the-box les modules `p2play-core/voice` et `p2play-core/spectator`. Consultez les guides dédiés :
-- 👁️ **[Guide Spectateur `p2play-core`](https://github.com/gab371/p2play-core/blob/main/docs/spectator-guide.md)**
-- 🎙️ **[Guide Chat Vocal `p2play-core`](https://github.com/gab371/p2play-core/blob/main/docs/voice-chat-guide.md)**
+`p2play-core` provides `p2play-core/voice` and `p2play-core/spectator` modules. Read the dedicated guides:
+- 👁️ **[`p2play-core` Spectator Guide](https://github.com/gab371/p2play-core/blob/main/docs/spectator-guide.md)**
+- 🎙️ **[`p2play-core` Voice Chat Guide](https://github.com/gab371/p2play-core/blob/main/docs/voice-chat-guide.md)**
