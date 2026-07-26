@@ -1,0 +1,6 @@
+name = "p2play-github-proxy"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# Optional: wrangler secret put GITHUB_TOKEN
+# [vars]
