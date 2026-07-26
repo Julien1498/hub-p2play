@@ -5,9 +5,12 @@ import { GameMountPanel } from "./components/game/GameMountPanel";
 import { AvatarSelector } from "./components/game/AvatarSelector";
 import { Gamepad2 } from "lucide-react";
 import { SoundToggle } from "./components/ui/SoundToggle";
+import { VoiceChatPanel } from "p2play-core/voice";
+
 export default function App() {
   const hub = useHub();
   const [copied, setCopied] = useState(false);
+  const enableHubVoice = import.meta.env.VITE_ENABLE_VOICE_CHAT !== "false";
 
   const handleCopy = () => {
     if (hub.roomId) {
@@ -31,19 +34,33 @@ export default function App() {
   // so the game's body gradient/fonts are not mixed with hub chrome.
   if (hub.activeGame) {
     return (
-      <GameMountPanel
-        gameName={hub.activeGame}
-        peerId={hub.myPeerId || ""}
-        playerName={hub.players.find((p) => p.peerId === hub.myPeerId)?.username || "Joueur"}
-        playerAvatar={hub.players.find((p) => p.peerId === hub.myPeerId)?.avatar || "👑"}
-        externalPeerManager={hub.externalPeerManager}
-        isHost={hub.isHost}
-        lateJoin={!hub.isHost}
-        gameConfig={hub.gameConfig}
-        hubPhase={hub.hubPhase}
-        onExit={hub.returnToHub}
-        onLeave={hub.disconnect}
-      />
+      <>
+        <GameMountPanel
+          gameName={hub.activeGame}
+          peerId={hub.myPeerId || ""}
+          playerName={hub.players.find((p) => p.peerId === hub.myPeerId)?.username || "Joueur"}
+          playerAvatar={hub.players.find((p) => p.peerId === hub.myPeerId)?.avatar || "👑"}
+          externalPeerManager={hub.externalPeerManager}
+          isHost={hub.isHost}
+          lateJoin={!hub.isHost}
+          gameConfig={hub.gameConfig}
+          hubPhase={hub.hubPhase}
+          hubHasVoiceChat={enableHubVoice}
+          onExit={hub.returnToHub}
+          onLeave={hub.disconnect}
+        />
+
+        {/* Floating Voice Chat Overlay - Persistent during active game */}
+        {enableHubVoice && hub.roomId && (
+          <div className="fixed bottom-4 right-4 z-[200] w-80">
+            <VoiceChatPanel
+              peerManager={hub.externalPeerManager}
+              username={hub.players.find((p) => p.peerId === hub.myPeerId)?.username}
+              avatar={hub.players.find((p) => p.peerId === hub.myPeerId)?.avatar || "👑"}
+            />
+          </div>
+        )}
+      </>
     );
   }
 
@@ -187,6 +204,16 @@ export default function App() {
         </a>
       </footer>
 
+      {/* Floating Voice Chat Overlay (Left-side Discord overlay) */}
+      {enableHubVoice && hub.roomId && (
+        <div className="fixed top-24 left-4 z-[200]">
+          <VoiceChatPanel
+            peerManager={hub.externalPeerManager}
+            username={hub.players.find((p) => p.peerId === hub.myPeerId)?.username}
+            avatar={hub.players.find((p) => p.peerId === hub.myPeerId)?.avatar || "👑"}
+          />
+        </div>
+      )}
     </div>
   );
 }

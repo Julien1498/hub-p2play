@@ -78,9 +78,7 @@ export class HubPeerManager implements PeerManagerLike {
     });
 
     this.peer.on("connection", (conn) => {
-      if (this.isHost) {
-        this.setupConnection(conn);
-      }
+      this.setupConnection(conn);
     });
 
     this.peer.on("disconnected", () => {
@@ -102,8 +100,8 @@ export class HubPeerManager implements PeerManagerLike {
       this.connections.set(conn.peer, conn);
       this.onPeerStatusChange?.(conn.peer, 'CONNECTED');
       
-      // If we are a client, let the host know our username & avatar
-      if (!this.isHost) {
+      // If we are a client connecting to host, let the host know our username & avatar
+      if (!this.isHost && conn.peer === this.hostPeerId) {
         conn.send({ type: 'PLAYER_JOINED', payload: { username: this.username, avatar: this.avatar }, sender: this.myPeerId });
       }
     });
@@ -132,6 +130,18 @@ export class HubPeerManager implements PeerManagerLike {
       } else if (data.type === 'SYNC_LOBBY') {
         this.lobbyPlayers = data.payload;
         if (this.onPlayersUpdate) this.onPlayersUpdate();
+
+        // Full Mesh Auto-Connection: establish direct PeerJS DataConnection to all non-host peers
+        if (!this.isHost && Array.isArray(this.lobbyPlayers)) {
+          this.lobbyPlayers.forEach(p => {
+            if (p.peerId && p.peerId !== this.myPeerId && !this.connections.has(p.peerId)) {
+              const peerConn = this.peer?.connect(p.peerId);
+              if (peerConn) {
+                this.setupConnection(peerConn);
+              }
+            }
+          });
+        }
       } else if (data.type === 'SYNC_HUB_STATE') {
         this.applyHubState(data.payload);
       }
