@@ -13,6 +13,7 @@ import { VoiceChatPanel } from "p2play-core/voice";
 import { TextChatPanel } from "p2play-core/chat";
 import { copyRoomUrlToClipboard } from "p2play-core/url";
 import { resolveCustomMountFnName } from "./utils/customGameLoader";
+import { isLiveGamesEnabled } from "./utils/liveGamesFlag";
 
 export default function App() {
   const hub = useHub();
@@ -20,6 +21,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const enableHubVoice = import.meta.env.VITE_ENABLE_VOICE_CHAT !== "false";
+  const enableLiveGames = isLiveGamesEnabled();
 
   const quickExamples = useMemo(
     () =>
@@ -39,6 +41,8 @@ export default function App() {
       isCustom: false as const,
     }));
 
+    if (!enableLiveGames) return builtin;
+
     const custom = hub.customGames.map((cg) => ({
       key: cg.key,
       label: formatHubGameLabel({
@@ -57,7 +61,7 @@ export default function App() {
     }));
 
     return [...builtin, ...custom];
-  }, [catalogGames, hub.customGames]);
+  }, [catalogGames, hub.customGames, enableLiveGames]);
 
   const selectedGameObj = allGames.find((g) => g.key === hub.selectedGame);
   const activeGameObj = allGames.find((g) => g.key === hub.activeGame);
@@ -184,11 +188,12 @@ export default function App() {
                   isHost={hub.isHost}
                   catalogLoading={catalogLoading}
                   catalogError={catalogError}
+                  enableLiveGames={enableLiveGames}
                   onSelect={hub.broadcastGameSelection}
                   onLaunch={() =>
                     hub.launchGame(selectedGameObj?.hasPreConfig ? "GAME_CONFIG" : "GAME_RUNNING")
                   }
-                  onAddClick={() => setIsAddModalOpen(true)}
+                  onAddClick={enableLiveGames ? () => setIsAddModalOpen(true) : undefined}
                   onRemoveCustom={hub.removeCustomGame}
                 />
 
@@ -219,12 +224,14 @@ export default function App() {
         </div>
       )}
 
-      <AddGameModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onGameAdded={(meta) => hub.addCustomGameMeta(meta)}
-        examples={quickExamples}
-      />
+      {enableLiveGames && (
+        <AddGameModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onGameAdded={(meta) => hub.addCustomGameMeta(meta)}
+          examples={quickExamples}
+        />
+      )}
 
       {enableHubVoice && hub.enableVoice && hub.roomId && (
         <div className="fixed top-24 left-4 z-[200]">

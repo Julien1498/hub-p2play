@@ -14,9 +14,10 @@ interface GameSelectionPanelProps {
   isHost: boolean;
   catalogLoading: boolean;
   catalogError: string | null;
+  enableLiveGames?: boolean;
   onSelect: (key: string) => void;
   onLaunch: () => void;
-  onAddClick: () => void;
+  onAddClick?: () => void;
   onRemoveCustom: (key: string) => void;
 }
 
@@ -26,6 +27,7 @@ export function GameSelectionPanel({
   isHost,
   catalogLoading,
   catalogError,
+  enableLiveGames = false,
   onSelect,
   onLaunch,
   onAddClick,
@@ -86,7 +88,7 @@ export function GameSelectionPanel({
                 </div>
               </button>
 
-              {g.isCustom && isHost && (
+              {g.isCustom && isHost && enableLiveGames && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -102,7 +104,7 @@ export function GameSelectionPanel({
             </div>
           ))}
 
-          {isHost && (
+          {isHost && enableLiveGames && onAddClick && (
             <button
               type="button"
               onClick={onAddClick}
