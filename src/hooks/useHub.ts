@@ -1,4 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
+import {
+  clearRoomUrlFromAddressBar,
+  subscribeForeignRoomReload,
+  syncRoomUrlToAddressBar,
+} from "p2play-core/url";
 import { globalHubPeer } from "../network/peerManager";
 import type { GameActionMessage, HubState } from "../network/protocol";
 import {
@@ -80,20 +85,24 @@ export function useHub() {
   }, []);
 
   useEffect(() => {
+    if (status !== "CONNECTED" && status !== "CONNECTING") return;
+    return subscribeForeignRoomReload(() => roomId);
+  }, [status, roomId]);
+
+  useEffect(() => {
     globalHubPeer.onStatusChange = (newStatus) => {
       setStatus(newStatus);
       if (newStatus === 'CONNECTED') {
-        setRoomId(globalHubPeer.hostPeerId);
-        // Sync initial custom games if host
-        if (globalHubPeer.isHost) {
-          globalHubPeer.setHubCustomGames(customGames);
-        }
+        const id = globalHubPeer.hostPeerId;
+        setRoomId(id);
+        if (id) syncRoomUrlToAddressBar(id);
       } else {
         setRoomId(null);
         setPlayers([]);
         setSelectedGame(null);
         setActiveGame(null);
         setGameConfig(null);
+        clearRoomUrlFromAddressBar();
       }
     };
 
@@ -157,6 +166,7 @@ export function useHub() {
     setActiveGame(null);
     setSelectedGame(null);
     setGameConfig(null);
+    clearRoomUrlFromAddressBar();
   }, []);
 
   return {

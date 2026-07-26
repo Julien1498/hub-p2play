@@ -65,15 +65,15 @@ To update a game version or add a new title, edit `games.json`:
   "games": {
     "skull": {
       "repo": "gab371/skull-and-roses",
-      "version": "v0.1.0"
+      "version": "v0.3.0"
     },
     "royal": {
       "repo": "gab371/royal-bluff",
-      "version": "v0.1.0"
+      "version": "v0.3.0"
     },
     "sheriff": {
       "repo": "gab371/sheriff-smugglers",
-      "version": "v1.0.0"
+      "version": "v0.3.0"
     }
   }
 }

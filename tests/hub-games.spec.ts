@@ -14,7 +14,7 @@ import { test, expect, type Browser, type Page } from "@playwright/test";
  * guest ready (when gated) + host in-game "Lancer la partie".
  */
 
-const HUB = `http://localhost:${process.env.HUB_PORT || "3004"}`;
+const HUB = `http://localhost:${(process.env.HUB_PORT || "3004").trim()}`;
 
 async function countOccurrences(page: Page, needle: string): Promise<number> {
   const text = (await page.locator("body").innerText()) ?? "";
@@ -211,16 +211,17 @@ for (const deck of ROYAL_DECKS) {
   });
 }
 
-// --- Sheriff: host must pick a deck theme, then click the in-game "Lancer la Partie" --
+// --- Sheriff: host picks a deck theme, guest readies, then host starts ----------
 //
-// The updated Sheriff game no longer auto-starts in embedded mode: it shows the
-// saloon lobby so the host can choose the deck theme (Western / Médiéval /
-// Moderne) before starting. We exercise two different decks to verify the
-// selection propagates to the guest and the game still launches a round.
+// Sheriff v0.3.0 no longer auto-starts in embedded mode: it shows the
+// "Saloon des Marchands" lobby so the host can choose the deck theme
+// (Far West / Médiéval / Moderne). Launch is gated on all guests being ready
+// (same pattern as Skull / Royal). Guests no longer see a read-only "Actif"
+// line for the theme — only the host sees the selector.
 
 const SHERIFF_DECKS = [
-  { key: "MEDIEVAL", label: "🏰 Médiéval", active: /Actif : 🏰 Médiéval/ },
-  { key: "MODERN", label: "🏙️ Moderne", active: /Actif : 🏙️ Moderne/ },
+  { key: "MEDIEVAL", label: /Médiéval/ },
+  { key: "MODERN", label: /Moderne/ },
 ];
 
 for (const deck of SHERIFF_DECKS) {
@@ -231,28 +232,31 @@ for (const deck of SHERIFF_DECKS) {
       await launchFromHub(host, "Sheriff");
 
       // The saloon lobby (with the deck selector) must appear.
-      await expect(host.getByText(/THÈME DU DECK/i)).toBeVisible({ timeout: 40000 });
+      await expect(host.getByText(/Saloon des Marchands/i)).toBeVisible({ timeout: 40000 });
+      await expect(host.getByText(/paquet/i)).toBeVisible({ timeout: 15000 });
 
       // Host picks the deck theme.
       const deckBtn = host.locator("button", { hasText: deck.label }).first();
       await expect(deckBtn).toBeEnabled();
       await deckBtn.click();
 
-      // The deck choice must propagate to the guest (read-only "Actif : …").
-      await expect(guest.getByText(deck.active)).toBeVisible({ timeout: 15000 });
+      // Guest must ready up before the host can start.
+      const readyBtn = guest.getByRole("button", { name: /Je suis pr/i }).first();
+      await expect(readyBtn).toBeEnabled({ timeout: 15000 });
+      await readyBtn.click();
 
-      // Host starts the game from the saloon lobby.
-      const inGameLaunch = host.getByRole("button", { name: /^Lancer la Partie$/ }).first();
-      await expect(inGameLaunch).toBeEnabled();
+      // Host starts from the saloon lobby (enabled once guest is ready).
+      const inGameLaunch = host.getByRole("button", { name: /Lancer la partie/i }).first();
+      await expect(inGameLaunch).toBeEnabled({ timeout: 15000 });
       await inGameLaunch.click();
 
       // The board must appear (round 1 started).
       await waitForBoard(host, /Manche \d+ \//, "sheriff-" + deck.key);
-      expect(/Marchands connectés/.test((await host.locator("body").innerText()) ?? ""),
+      expect(/Saloon des Marchands/.test((await host.locator("body").innerText()) ?? ""),
         "sheriff: saloon lobby should be gone").toBe(false);
 
       // Round in progress: the host is the SHÉRIF, waiting for merchants' cargo.
-      await expect(host.getByText(/En attente.*préparent leur cargaison/i)).toBeVisible({
+      await expect(host.getByText(/En attente.*pr.parent leur cargaison/i)).toBeVisible({
         timeout: 15000,
       });
 
@@ -267,3 +271,45 @@ for (const deck of SHERIFF_DECKS) {
     }
   });
 }
+
+test("Room URL Sharing — auto-fills room code & copy link works", async ({ browser }) => {
+  const hostCtx = await browser.newContext();
+  const guestCtx = await browser.newContext();
+  const host = await hostCtx.newPage();
+  const guest = await guestCtx.newPage();
+
+  try {
+    // 1. Host creates room
+    await host.goto(HUB, { waitUntil: "networkidle" });
+    await host.getByPlaceholder(/pseudo/i).fill("HostURL");
+    await host.getByRole("button", { name: /Créer un salon/i }).click();
+    await expect(host.getByText(/Salon Connecté/i)).toBeVisible({ timeout: 30000 });
+
+    // 2. Extract code & click Copy Link
+    const codeText = (await host.getByText(/Code :/).first().innerText()).match(/[A-Z0-9]{6}/);
+    const roomCode = codeText?.[0];
+    expect(roomCode).toBeTruthy();
+
+    const copyBtn = host.getByRole("button", { name: /Copier le lien/i });
+    await expect(copyBtn).toBeVisible();
+    await copyBtn.click();
+    await expect(host.getByText(/Lien copié !/i)).toBeVisible();
+
+    // 3. Guest opens URL with #/ROOMCODE directly
+    const directUrl = `${HUB}/#/${roomCode}`;
+    await guest.goto(directUrl, { waitUntil: "networkidle" });
+
+    // 4. Verify Invitation panel & code display
+    await expect(guest.getByText(/Invitation au Salon/i)).toBeVisible();
+    await expect(guest.getByText(roomCode!)).toBeVisible();
+
+    // 5. Test back button returns to normal home view
+    const backBtn = guest.getByRole("button", { name: /Créer un salon ou entrer un autre code/i });
+    await expect(backBtn).toBeVisible();
+    await backBtn.click();
+    await expect(guest.getByRole("button", { name: /Créer un salon/i })).toBeVisible();
+  } finally {
+    await hostCtx.close();
+    await guestCtx.close();
+  }
+});

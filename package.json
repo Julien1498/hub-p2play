@@ -1,7 +1,7 @@
 {
   "name": "hub-p2play",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "node download-games.js && vite",
@@ -19,7 +19,7 @@
     "clsx": "^2.1.1",
     "fflate": "^0.8.3",
     "lucide-react": "^1.25.0",
-    "p2play-core": "github:gab371/p2play-core#v0.2.1",
+    "p2play-core": "github:gab371/p2play-core#v0.3.3",
     "peerjs": "^1.5.5",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
