@@ -180,29 +180,40 @@ export function createBlobUrls(key: string, bundle: { jsCode: string; cssCode?: 
 // --- Proxy Fetch Helper ---
 
 async function fetchViaProxy(url: string, acceptHeader: string = 'application/octet-stream'): Promise<Response> {
-  const proxyUrl = `/api/github-proxy?url=${encodeURIComponent(url)}`;
-
+  // 1. Local Vite server proxy (used when running locally in development)
   try {
+    const proxyUrl = `/api/github-proxy?url=${encodeURIComponent(url)}`;
     const res = await fetch(proxyUrl, {
       headers: { 'Accept': acceptHeader }
     });
     if (res.ok) return res;
   } catch (e) {
-    console.warn('[customGameLoader] Local Vite server proxy failed, trying fallbacks...', e);
+    console.warn('[customGameLoader] Local Vite server proxy unavailable, trying client-side CORS proxies...', e);
   }
 
-  // Fallback 1: CORS proxy fallback
+  // 2. Client-side CORS Proxy 1 (corsproxy.io - works statically on GitHub Pages)
   try {
-    const fallbackUrl = ``;
-    const res = await fetch(fallbackUrl, {
+    const corsProxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const res = await fetch(corsProxyUrl, {
       headers: { 'Accept': acceptHeader }
     });
     if (res.ok) return res;
   } catch (e) {
-    console.warn('[customGameLoader] Fallback proxy 1 failed:', e);
+    console.warn('[customGameLoader] corsproxy.io failed:', e);
   }
 
-  // Fallback 2: Direct fetch (in case CORS is open)
+  // 3. Client-side CORS Proxy 2 (api.allorigins.win)
+  try {
+    const allOriginsUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res = await fetch(allOriginsUrl, {
+      headers: { 'Accept': acceptHeader }
+    });
+    if (res.ok) return res;
+  } catch (e) {
+    console.warn('[customGameLoader] allorigins fallback failed:', e);
+  }
+
+  // 4. Direct fetch fallback
   try {
     const res = await fetch(url, {
       headers: { 'Accept': acceptHeader }
@@ -223,121 +234,71 @@ export async function fetchAndPrepareCustomGame(
 ): Promise<{ meta: CustomGameMeta; bundle: ExtractedBundle }> {
   const { owner, repo, version: requestedVersion } = parseGithubUrl(urlInput);
   const repoSlug = `${owner}/${repo}`;
-  const tag = requestedVersion || 'main';
   const key = `custom-${owner.toLowerCase()}-${repo.toLowerCase()}`;
 
-  onProgress?.('Chargement du jeu depuis GitHub...');
+  onProgress?.('Recherche de la release GitHub...');
+
+  let releaseTag = requestedVersion || 'latest';
+  let releaseTitle = repoSlug;
+  let downloadUrl = '';
+
+  // Step 1: Resolve Release Metadata from GitHub API
+  try {
+    const apiUrl = requestedVersion
+      ? `https://api.github.com/repos/${owner}/${repo}/releases/tags/${requestedVersion}`
+      : `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
+
+    const apiRes = await fetchViaProxy(apiUrl, 'application/vnd.github.v3+json');
+    const releaseData = await apiRes.json();
+
+    if (releaseData && releaseData.tag_name) {
+      releaseTag = releaseData.tag_name;
+      if (releaseData.name) releaseTitle = releaseData.name;
+    }
+
+    if (releaseData && Array.isArray(releaseData.assets) && releaseData.assets.length > 0) {
+      const zipAsset = releaseData.assets.find((a: any) =>
+        a.name && (a.name.toLowerCase() === 'dist.zip' || a.name.toLowerCase().endsWith('.zip'))
+      );
+      if (zipAsset) {
+        downloadUrl = zipAsset.browser_download_url || `https://github.com/${owner}/${repo}/releases/download/${releaseTag}/${zipAsset.name}`;
+      }
+    }
+  } catch (err) {
+    console.warn('[customGameLoader] GitHub API resolution warning, using default release URL pattern:', err);
+  }
+
+  // Fallback download URL pattern for dist.zip
+  if (!downloadUrl) {
+    downloadUrl = `https://github.com/${owner}/${repo}/releases/download/${releaseTag}/dist.zip`;
+  }
+
+  // Step 2: Download dist.zip binary stream
+  onProgress?.(`Téléchargement de dist.zip (${releaseTag})...`);
+  const zipRes = await fetchViaProxy(downloadUrl, 'application/octet-stream');
+  const arrayBuffer = await zipRes.arrayBuffer();
+
+  // Step 3: Unzip bundle in browser memory using fflate
+  onProgress?.('Extraction du bundle dist.zip dans le navigateur...');
+  const unzipped = unzipSync(new Uint8Array(arrayBuffer));
 
   let jsCode: string | null = null;
   let cssCode: string | null = null;
-  let releaseTag = requestedVersion || 'latest';
-  let releaseTitle = repoSlug;
-  let downloadUrl = `https://github.com/${owner}/${repo}`;
 
-
-  // Strategy 1: Direct CORS-enabled CDN fetches (jsDelivr / raw.githubusercontent / github.io)
-  // These URLs support native CORS headers (Access-Control-Allow-Origin: *) and require ZERO server proxy on GitHub Pages.
-  const candidateJsUrls = [
-    `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${requestedVersion || 'latest'}/dist/index.js`,
-    `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${requestedVersion || 'latest'}/index.js`,
-    `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/dist/index.js`,
-    `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/index.js`,
-    `https://raw.githubusercontent.com/${owner}/${repo}/${requestedVersion || 'main'}/dist/index.js`,
-    `https://raw.githubusercontent.com/${owner}/${repo}/${requestedVersion || 'main'}/index.js`,
-    `https://${owner}.github.io/${repo}/dist/index.js`,
-    `https://${owner}.github.io/${repo}/index.js`,
-  ];
-
-  const candidateCssUrls = [
-    `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${requestedVersion || 'latest'}/dist/style.css`,
-    `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${requestedVersion || 'latest'}/style.css`,
-    `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/dist/style.css`,
-    `https://raw.githubusercontent.com/${owner}/${repo}/${requestedVersion || 'main'}/dist/style.css`,
-    `https://raw.githubusercontent.com/${owner}/${repo}/${requestedVersion || 'main'}/style.css`,
-  ];
-
-  for (const jsUrl of candidateJsUrls) {
-    try {
-      const res = await fetch(jsUrl);
-      if (res.ok) {
-        const text = await res.text();
-        if (text && !text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
-          jsCode = text;
-          break;
-        }
-      }
-    } catch (_) {}
-  }
-
-  for (const cssUrl of candidateCssUrls) {
-    try {
-      const res = await fetch(cssUrl);
-      if (res.ok) {
-        const text = await res.text();
-        if (text && !text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
-          cssCode = text;
-          break;
-        }
-      }
-    } catch (_) {}
-  }
-
-  // Strategy 2: Fallback to dist.zip download and in-browser unzipping if direct CDN JS was not found
-  if (!jsCode) {
-    // Step 1: Resolve Release Metadata
-
-
-    try {
-      onProgress?.('Recherche de la release GitHub...');
-      const apiUrl = requestedVersion
-        ? `https://api.github.com/repos/${owner}/${repo}/releases/tags/${requestedVersion}`
-        : `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
-
-      const apiRes = await fetchViaProxy(apiUrl, 'application/vnd.github.v3+json');
-      const releaseData = await apiRes.json();
-
-      if (releaseData && releaseData.tag_name) {
-        releaseTag = releaseData.tag_name;
-        if (releaseData.name) releaseTitle = releaseData.name;
-      }
-
-      if (releaseData && Array.isArray(releaseData.assets) && releaseData.assets.length > 0) {
-        const zipAsset = releaseData.assets.find((a: any) =>
-          a.name && (a.name.toLowerCase() === 'dist.zip' || a.name.toLowerCase().endsWith('.zip'))
-        );
-        if (zipAsset) {
-          downloadUrl = zipAsset.browser_download_url || `https://github.com/${owner}/${repo}/releases/download/${releaseTag}/${zipAsset.name}`;
-        }
-      }
-    } catch (err) {
-      console.warn('[customGameLoader] GitHub API resolution warning, using default release URL pattern:', err);
+  for (const filename of Object.keys(unzipped)) {
+    const lower = filename.toLowerCase();
+    if (lower.endsWith('.js') && (!jsCode || lower.endsWith('index.js') || lower.endsWith('dist/index.js'))) {
+      jsCode = new TextDecoder('utf-8').decode(unzipped[filename]);
     }
-
-    if (!downloadUrl) {
-      downloadUrl = `https://github.com/${owner}/${repo}/releases/download/${releaseTag}/dist.zip`;
-    }
-
-    onProgress?.(`Telechargement du bundle (${releaseTag})...`);
-    const zipRes = await fetchViaProxy(downloadUrl, 'application/octet-stream');
-    const arrayBuffer = await zipRes.arrayBuffer();
-
-    onProgress?.('Extraction du bundle dist.zip...');
-    const unzipped = unzipSync(new Uint8Array(arrayBuffer));
-
-    for (const filename of Object.keys(unzipped)) {
-      const lower = filename.toLowerCase();
-      if (lower.endsWith('.js') && (!jsCode || lower.endsWith('index.js') || lower.endsWith('dist/index.js'))) {
-        jsCode = new TextDecoder('utf-8').decode(unzipped[filename]);
-      }
-      if (lower.endsWith('.css') && (!cssCode || lower.endsWith('style.css') || lower.endsWith('index.css') || lower.endsWith('dist/style.css'))) {
-        cssCode = new TextDecoder('utf-8').decode(unzipped[filename]);
-      }
+    if (lower.endsWith('.css') && (!cssCode || lower.endsWith('style.css') || lower.endsWith('index.css') || lower.endsWith('dist/style.css'))) {
+      cssCode = new TextDecoder('utf-8').decode(unzipped[filename]);
     }
   }
 
   if (!jsCode) {
-    throw new Error(`Aucun fichier JavaScript (.js) trouvé pour ${repoSlug}`);
+    throw new Error(`Aucun fichier JavaScript (.js) trouvé dans dist.zip pour ${repoSlug}`);
   }
+
 
 
   onProgress?.('Sauvegarde du jeu dans le navigateur...');
