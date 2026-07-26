@@ -73,16 +73,20 @@ jobs:
         run: npm install
 
       # Optional Live-games proxy: deploy Cloudflare Worker, then bake its URL into the Hub build.
-      # Secrets (Settings → Actions): CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
-      # Create token at https://dash.cloudflare.com/profile/api-tokens
-      #   Template "Edit Cloudflare Workers" is enough.
+      # Secrets: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
+      # Variable (Settings → Variables, not Secrets): VITE_ENABLE_LIVE_GAMES=false to force off
+      # Optional secret override for custom domain: VITE_GITHUB_PROXY_URL
       - name: Detect Cloudflare credentials
         id: cf
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          LIVE_FLAG: ${{ vars.VITE_ENABLE_LIVE_GAMES }}
         run: |
-          if [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then
+          if [ "$LIVE_FLAG" = "false" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "VITE_ENABLE_LIVE_GAMES=false — skipping Cloudflare proxy deploy."
+          elif [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -103,14 +107,18 @@ jobs:
         id: live_proxy
         env:
           CF_DEPLOY_URL: ${{ steps.cf_proxy.outputs.deployment-url }}
-          # Prefer this secret when set (custom domain without your workers.dev name).
           MANUAL_PROXY_URL: ${{ secrets.VITE_GITHUB_PROXY_URL }}
+          LIVE_FLAG: ${{ vars.VITE_ENABLE_LIVE_GAMES }}
         run: |
           url=""
+          if [ "$LIVE_FLAG" = "false" ]; then
+            echo "url=" >> "$GITHUB_OUTPUT"
+            echo "Live GitHub games forced off via vars.VITE_ENABLE_LIVE_GAMES=false."
+            exit 0
+          fi
           if [ -n "$MANUAL_PROXY_URL" ]; then
             url="${MANUAL_PROXY_URL%/}"
           elif [ -n "$CF_DEPLOY_URL" ]; then
-            # Normalize: strip junk after space, ensure https://
             host=$(echo "$CF_DEPLOY_URL" | awk '{print $1}')
             case "$host" in
               https://*) url="$host" ;;
@@ -129,6 +137,8 @@ jobs:
       - name: Build Hub
         env:
           VITE_GITHUB_PROXY_URL: ${{ steps.live_proxy.outputs.url }}
+          # Repository variable (Actions → Variables), e.g. false — NOT available as secrets.*
+          VITE_ENABLE_LIVE_GAMES: ${{ vars.VITE_ENABLE_LIVE_GAMES }}
         run: npm run build
 
       - name: Zip Hub Production Assets
